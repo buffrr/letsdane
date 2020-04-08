@@ -20,7 +20,7 @@ It won't mitm sites that don't use DANE/TLSA and will serve their original certi
 
 ## Usage
 
-Download the latest pre-built binary for your OS from [releases](https://github.com.) and run
+Download the latest pre-built binary for your OS from [releases](https://github.com/buffrr/godane/releases) and run
 
 
     ./godane -dns tls://1.1.1.1
