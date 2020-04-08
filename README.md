@@ -1,7 +1,7 @@
 # Go DANE
 
 <a href="https://goreportcard.com/report/github.com/buffrr/godane"><img src="https://goreportcard.com/badge/github.com/buffrr/godane"/></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg?style=flat-square"/></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"/></a>
 
 
 **Note: Go DANE is still under development, use at your own risk.**
