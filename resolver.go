@@ -170,7 +170,7 @@ func (rs *ClientResolver) LookupIP(hostname string) ([]net.IP, error) {
 	}()
 
 	go func() {
-		ipv6, err2 = rs.lookupIPv4(hostname)
+		ipv6, err2 = rs.lookupIPv6(hostname)
 		wg.Done()
 	}()
 
