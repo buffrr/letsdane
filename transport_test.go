@@ -8,7 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/google/martian/v3/mitm"
+	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
 	"io/ioutil"
 	"log"
@@ -28,7 +28,7 @@ type TestResolver struct {
 	tlsaRRs   []dns.TLSA
 }
 
-func (rs TestResolver) LookupIP(name string) ([]net.IP, error) {
+func (rs TestResolver) LookupIP(name string, secure bool) ([]net.IP, error) {
 	if name == rs.domain {
 		return []net.IP{rs.ip}, nil
 	}
@@ -49,11 +49,11 @@ func TestRoundTripperTLS(t *testing.T) {
 		fmt.Fprintln(w, "hello")
 	}))
 	defer ts.Close()
+
 	cert, _, goodTLSA := testCreateCertTLSAPair(3, 1, 1)
 	ts.TLS = &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
-
 	ts.StartTLS()
 
 	// https://127.0.0.1:port => https://example.com:port
@@ -67,10 +67,13 @@ func TestRoundTripperTLS(t *testing.T) {
 		ip:     net.ParseIP(host),
 	}
 
-	client := ts.Client()
-	client.Transport = RoundTripper(rs)
+	testx, _ := rs.LookupIP("example.com", false)
+	fmt.Println(testx)
 
-	// no tlsa
+	client := ts.Client()
+	client.Transport = RoundTripper(rs, nil)
+
+	// nil context
 	_, err := client.Get(requrl)
 	if err == nil {
 		t.Fatalf("want error, got nil")
@@ -81,7 +84,16 @@ func TestRoundTripperTLS(t *testing.T) {
 	_, _, tlsa2 := testCreateCertTLSAPair(3, 1, 1)
 	rs.tlsaRRs = []dns.TLSA{tlsa2}
 
-	client.Transport = RoundTripper(rs)
+	authRes := &authResult{
+		TLSA: tlsaRRs,
+		Host: host,
+		Port: port,
+		IPs:  []net.IP{rs.ip},
+	}
+
+	client.Transport = RoundTripper(rs, &goproxy.ProxyCtx{
+		UserData: authRes,
+	})
 	_, err = client.Get(requrl)
 	if err == nil {
 		t.Fatalf("want error, got nil")
@@ -89,7 +101,12 @@ func TestRoundTripperTLS(t *testing.T) {
 
 	// good tlsa
 	rs.tlsaRRs = []dns.TLSA{goodTLSA}
-	client.Transport = RoundTripper(rs)
+
+	authRes.TLSA = rs.tlsaRRs
+	client.Transport = RoundTripper(rs, &goproxy.ProxyCtx{
+		UserData: authRes,
+	})
+
 	res, err := client.Get(requrl)
 
 	if err != nil {
@@ -111,7 +128,8 @@ func TestRoundTripperTLS(t *testing.T) {
 	// unsupported tlsa
 	_, _, tlsa3 := testCreateCertTLSAPair(1, 0, 1)
 	rs.tlsaRRs = []dns.TLSA{tlsa3}
-	client.Transport = RoundTripper(rs)
+	authRes.TLSA = rs.tlsaRRs
+	client.Transport = RoundTripper(rs, nil)
 	_, err = client.Get(requrl)
 
 	if err == nil {
@@ -120,9 +138,9 @@ func TestRoundTripperTLS(t *testing.T) {
 }
 
 func TestRoundTripperNoTLS(t *testing.T) {
-	ts := httptest.NewServer(http.HandlerFunc(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "hello")
-	})))
+	}))
 	defer ts.Close()
 
 	// http://127.0.0.1:port => http://example.com:port
@@ -137,7 +155,7 @@ func TestRoundTripperNoTLS(t *testing.T) {
 	}
 
 	client := ts.Client()
-	client.Transport = RoundTripper(rs)
+	client.Transport = RoundTripper(rs, nil)
 
 	res, err := client.Get(requrl)
 	if err != nil {
@@ -160,16 +178,16 @@ func TestRoundTripperNoTLS(t *testing.T) {
 
 // creates a test certificate and a TLSA record for it.
 func testCreateCertTLSAPair(usage, selector, matching uint8) (tls.Certificate, *rsa.PrivateKey, dns.TLSA) {
-	ca, priv, err := mitm.NewAuthority("DNSSEC", "DNSSEC", time.Hour)
+	ca, priv, err := NewAuthority("DNSSEC", "DNSSEC", time.Hour)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	m, err := mitm.NewConfig(ca, priv)
+	m, err := newMITMConfig(ca, priv, time.Hour, "test")
 	if err != nil {
 		log.Fatal(err)
 	}
-	mc := m.TLS()
+	mc := m.tlsForHost("example.com")
 	cert, err := mc.GetCertificate(&tls.ClientHelloInfo{
 		ServerName: "example.com",
 	})

@@ -14,9 +14,9 @@ import (
 	"time"
 )
 
-// Resolver looks up names
+// Resolver used for dns lookups
 type Resolver interface {
-	LookupIP(string) ([]net.IP, error)
+	LookupIP(string, bool) ([]net.IP, error)
 	LookupTLSA(string) ([]dns.TLSA, error)
 }
 
@@ -61,7 +61,7 @@ func NewResolver(server string) (*ClientResolver, error) {
 func parseAddress(server string) (string, string, error) {
 	u, err := url.Parse(server)
 	if err != nil {
-		return "", "", fmt.Errorf("dns: couldn't parse server address: %v", err)
+		return "", "", fmt.Errorf("couldn't parse server address: %v", err)
 	}
 
 	var p, defaultPort string
@@ -81,7 +81,7 @@ func parseAddress(server string) (string, string, error) {
 		p = u.Scheme
 		host = u.Scheme + "://" + u.Host
 	default:
-		return "", "", fmt.Errorf("dns: unsupported scheme %s", u.Scheme)
+		return "", "", fmt.Errorf("unsupported scheme %s", u.Scheme)
 	}
 
 	_, _, err = net.SplitHostPort(u.Host)
@@ -120,7 +120,7 @@ func (rs *ClientResolver) exchangeDOH(m *dns.Msg) (r *dns.Msg, rtt time.Duration
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, 0, fmt.Errorf("dns: %s", resp.Status)
+		return nil, 0, fmt.Errorf("error fetching response %s", resp.Status)
 	}
 
 	defer resp.Body.Close()
@@ -149,49 +149,59 @@ func (rs *ClientResolver) checkCache(key string, qtype uint16) (*entry, bool) {
 
 // LookupIP looks up host using the specified resolver.
 // It returns a slice of that host's IPv4 and IPv6 addresses.
-func (rs *ClientResolver) LookupIP(hostname string) ([]net.IP, error) {
+func (rs *ClientResolver) LookupIP(hostname string, secure bool) ([]net.IP, error) {
 	ip := net.ParseIP(hostname)
 	if ip != nil {
+		if secure {
+			return []net.IP{}, nil
+		}
 		return []net.IP{ip}, nil
 	}
 
 	if !shouldResolve(hostname) {
-		return net.LookupIP(hostname)
+		if secure {
+			return []net.IP{}, nil
+		}
+		ips, err := net.LookupIP(hostname)
+		return ips, err
 	}
 
 	var wg sync.WaitGroup
 	var ipv4, ipv6 []net.IP
-	var err1, err2 error
+	var errIPv4, errIPv6 error
 
 	wg.Add(2)
 	go func() {
-		ipv4, err1 = rs.lookupIPv4(hostname)
+		ipv4, errIPv4 = rs.lookupIPv4(hostname, secure)
 		wg.Done()
 	}()
 
 	go func() {
-		ipv6, err2 = rs.lookupIPv6(hostname)
+		ipv6, errIPv6 = rs.lookupIPv6(hostname, secure)
 		wg.Done()
 	}()
 
 	wg.Wait()
-
-	if err1 != nil {
-		return nil, err1
+	if errIPv4 != nil {
+		return nil, errIPv4
 	}
-
-	if err2 != nil {
-		return nil, err2
+	if errIPv6 != nil {
+		return nil, errIPv6
 	}
 
 	return append(ipv4, ipv6...), nil
 }
 
-func (rs *ClientResolver) lookupIPv4(hostname string) ([]net.IP, error) {
-	rr, err := rs.lookup(hostname, dns.TypeA)
+func (rs *ClientResolver) lookupIPv4(hostname string, secure bool) ([]net.IP, error) {
+	rr, ad, err := rs.lookup(hostname, dns.TypeA)
 	if err != nil {
 		return nil, err
 	}
+
+	if secure && !ad {
+		return []net.IP{}, nil
+	}
+
 	var ips []net.IP
 	for _, r := range rr {
 		switch t := r.(type) {
@@ -202,11 +212,15 @@ func (rs *ClientResolver) lookupIPv4(hostname string) ([]net.IP, error) {
 	return ips, nil
 }
 
-func (rs *ClientResolver) lookupIPv6(hostname string) ([]net.IP, error) {
-	rr, err := rs.lookup(hostname, dns.TypeAAAA)
+func (rs *ClientResolver) lookupIPv6(hostname string, secure bool) ([]net.IP, error) {
+	rr, ad, err := rs.lookup(hostname, dns.TypeAAAA)
 	if err != nil {
 		return nil, err
 	}
+	if secure && !ad {
+		return []net.IP{}, nil
+	}
+
 	var ips []net.IP
 	for _, r := range rr {
 		switch t := r.(type) {
@@ -219,9 +233,13 @@ func (rs *ClientResolver) lookupIPv6(hostname string) ([]net.IP, error) {
 
 // LookupTLSA returns TLSA records for the given TLSA prefix.
 func (rs *ClientResolver) LookupTLSA(prefix string) ([]dns.TLSA, error) {
-	rr, err := rs.lookup(prefix, dns.TypeTLSA)
+	rr, ad, err := rs.lookup(prefix, dns.TypeTLSA)
 	if err != nil {
 		return nil, err
+	}
+
+	if !ad {
+		return nil, errors.New("tlsa response not authenticated")
 	}
 
 	var tr []dns.TLSA
@@ -235,9 +253,9 @@ func (rs *ClientResolver) LookupTLSA(prefix string) ([]dns.TLSA, error) {
 	return tr, nil
 }
 
-func (rs *ClientResolver) lookup(name string, qtype uint16) ([]dns.RR, error) {
+func (rs *ClientResolver) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 	if ans, ok := rs.checkCache(name, qtype); ok {
-		return ans.msg, nil
+		return ans.msg, ans.ad, nil
 	}
 
 	m := new(dns.Msg)
@@ -247,25 +265,22 @@ func (rs *ClientResolver) lookup(name string, qtype uint16) ([]dns.RR, error) {
 
 	r, _, err := rs.exchange(m)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
 	if r.Truncated {
-		return nil, errors.New("dns: response truncated")
-	}
-
-	if qtype == dns.TypeTLSA && !r.AuthenticatedData {
-		return nil, errors.New("dns: resolver didn't confirm msg (no ad flag)")
+		return nil, false, errors.New("dns response truncated")
 	}
 
 	e := &entry{
 		msg: r.Answer,
+		ad:  r.AuthenticatedData,
 		ttl: time.Now().Add(getMinTTL(r)),
 	}
 
 	rs.rrCache[qtype].set(name, e)
 
-	return r.Answer, nil
+	return e.msg, e.ad, nil
 }
 
 // getMinTTL get the ttl for dns msg

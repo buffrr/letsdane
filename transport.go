@@ -6,7 +6,9 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
+	"log"
 	"net"
 	"net/http"
 	"time"
@@ -25,21 +27,26 @@ var dialer = net.Dialer{
 	KeepAlive: KeepAlive,
 }
 
+var daneErr = errors.New("DANE verification failed")
+
 // RoundTripper returns a round tripper capable of performing DANE/TLSA
 // verification. Uses the given resolver for dns lookups.
-func RoundTripper(rs Resolver) http.RoundTripper {
+func RoundTripper(rs Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
 			return dialContext(ctx, network, addr, rs)
 		},
-		DialTLS: func(network, address string) (net.Conn, error) {
-			tlsa := GetTLSAPrefix(address)
-			if ans, err := rs.LookupTLSA(tlsa); err == nil && TLSASupported(ans) {
-				tlsConfig := newTLSVerifyConfig(ans)
-				return dialTLS(network, address, tlsConfig, rs)
+		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if gContext == nil || gContext.UserData == nil {
+				return nil, fmt.Errorf("no validation data given")
 			}
 
-			return dialTLS(network, address, &tls.Config{InsecureSkipVerify: false}, rs)
+			if cdata, ok := gContext.UserData.(*authResult); ok {
+				tlsConfig := newTLSVerifyConfig(cdata.TLSA)
+				return dialTLS(network, address, tlsConfig, cdata)
+			}
+
+			return nil, fmt.Errorf("address %s not reachable", address)
 		},
 		TLSHandshakeTimeout:   TLSHandshakeTimeout,
 		ExpectContinueTimeout: ExpectContinueTimeout,
@@ -47,8 +54,8 @@ func RoundTripper(rs Resolver) http.RoundTripper {
 
 }
 
-// TLSASupported checks if DANE usage is supported
-// for the given TLSA records. currently checks for usage EE(3).
+// TLSASupported checks if there is a supported DANE usage
+// from the given TLSA records. currently checks for usage EE(3).
 func TLSASupported(rrs []dns.TLSA) bool {
 	for _, rr := range rrs {
 		if rr.Usage == 3 {
@@ -71,14 +78,14 @@ func getTLSAValidator(rrs []dns.TLSA) func([][]byte, [][]*x509.Certificate) erro
 		for i, asn1Data := range rawCerts {
 			cert, err := x509.ParseCertificate(asn1Data)
 			if err != nil {
-				return errors.New("tls: failed to parse certificate from server: " + err.Error())
+				return errors.New("failed to parse certificate from server: " + err.Error())
 			}
 			certs[i] = cert
 		}
 
 		// TLSA verification.
 		// Currently, supports DANE-EE(3). We only need to check the leaf certificate.
-		// https://tools.ietf.org/id/draft-ietf-dane-ops-02.html#type3
+		// https://tools.ietf.org/html/rfc7671#section-5.1
 		// https://tools.ietf.org/html/rfc6698
 		for _, t := range rrs {
 			if t.Usage != 3 {
@@ -90,32 +97,19 @@ func getTLSAValidator(rrs []dns.TLSA) func([][]byte, [][]*x509.Certificate) erro
 			}
 		}
 
-		return errors.New("tls: DANE verification failed")
+		return daneErr
 	}
 }
 
 // GetDialFunc returns a dial function that uses the given resolver.
 func GetDialFunc(rs Resolver) func(network string, addr string) (net.Conn, error) {
 	return func(network string, addr string) (net.Conn, error) {
-		_, port, ips, err := readAddr(addr, rs)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, ip := range ips {
-			ipaddr := net.JoinHostPort(ip.String(), port)
-			conn, err := dialer.Dial(network, ipaddr)
-			if err != nil {
-				continue
-			}
-			return conn, nil
-		}
-		return nil, fmt.Errorf("dial: could not reach %s", addr)
+		return dialContext(context.Background(), network, addr, rs)
 	}
 }
 
 func dialContext(ctx context.Context, network, addr string, rs Resolver) (net.Conn, error) {
-	_, port, ips, err := readAddr(addr, rs)
+	_, port, ips, err := resolveAddr(addr, rs)
 	if err != nil {
 		return nil, err
 	}
@@ -129,45 +123,44 @@ func dialContext(ctx context.Context, network, addr string, rs Resolver) (net.Co
 		return conn, nil
 	}
 
-	return nil, fmt.Errorf("dial ctx: could not reach %s", addr)
+	return nil, fmt.Errorf("could not reach %s", addr)
 
 }
 
-func dialTLS(network, addr string, config *tls.Config, rs Resolver) (*tls.Conn, error) {
-	host, port, ips, err := readAddr(addr, rs)
-	if err != nil {
-		return nil, err
-	}
+func dialTLS(network, addr string, config *tls.Config, cdata *authResult) (*tls.Conn, error) {
+	config.ServerName = cdata.Host
 
-	config.ServerName = host
-
-	for _, ip := range ips {
-		ipaddr := net.JoinHostPort(ip.String(), port)
+	for _, ip := range cdata.IPs {
+		ipaddr := net.JoinHostPort(ip.String(), cdata.Port)
 		conn, err := tls.Dial(network, ipaddr, config)
 		if err != nil {
+			if err == daneErr {
+				return nil, err
+			}
+
+			log.Printf("dialing %s for host %s failed: %v", ipaddr, addr, err)
 			continue
 		}
 		return conn, nil
 	}
 
-	return nil, fmt.Errorf("dial tls: could not reach %s", addr)
-
+	return nil, fmt.Errorf("could not reach %s", addr)
 }
 
-func readAddr(addr string, rs Resolver) (host, port string, ips []net.IP, err error) {
+func resolveAddr(addr string, rs Resolver) (host, port string, ips []net.IP, err error) {
 	host, port, err = net.SplitHostPort(addr)
 	if err != nil {
 		return
 	}
 
-	ips, err = rs.LookupIP(host)
+	ips, err = rs.LookupIP(host, false)
+
 	if err != nil {
-		err = fmt.Errorf("dial: %v", err)
 		return
 	}
 
 	if len(ips) == 0 {
-		err = fmt.Errorf("dial: lookup %s no such host", addr)
+		err = fmt.Errorf("lookup %s no such host", addr)
 		return
 	}
 

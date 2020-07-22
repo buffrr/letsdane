@@ -8,6 +8,7 @@ import (
 
 type entry struct {
 	msg []dns.RR
+	ad  bool
 	ttl time.Time
 }
 

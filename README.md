@@ -7,7 +7,7 @@
 **Note: Go DANE is still under development, use at your own risk.**
 
 
-Go DANE enables the use of DANE/TLSA in browsers using a simple proxy. It currently supports [DANE](https://tools.ietf.org/html/rfc6698) EE(3), and works with self-signed certificates.
+Go DANE enables the use of [DANE (DNS Based Authentication of Named Entities)](https://tools.ietf.org/html/rfc6698) in browsers using a simple proxy. It currently supports DANE-EE, and works with self-signed certificates.
 
 
 
@@ -18,34 +18,36 @@ Go DANE enables the use of DANE/TLSA in browsers using a simple proxy. It curren
 
 ## How it works
 
-Go DANE mitms HTTPS for sites that support DANE.  It requires one root CA to be installed locally. Go DANE will use the root CA to create certificates on the fly if it was able to verify DANE/TLSA.
-It won't mitm sites that don't use DANE/TLSA and will serve their original certificate instead.
- 
 
+Go DANE acts as a middleman between the browser and DANE enabled sites. It will check if a domain supports it, and generate a certificate on the fly if the authentication was successful. The connection will remain encrypted between you and the end server. If a website doesn't support DANE, its original certificate will be served instead.
+
+For this to work, Go DANE generates a local certificate authority that must be installed in your browser's certificate store. This CA is used to issue certificates for successful DANE authentications.
 ## Usage
 
-Download the latest pre-built binary for your OS from [releases](https://github.com/buffrr/godane/releases) and run
+You can build it from source using `go build github.com/buffrr/godane/cmd/godane` or download a binary for your OS from [releases](https://github.com/buffrr/godane/releases)
+ 
 
 
     ./godane -dns tls://1.1.1.1
+
+You will be prompted to enter a passphrase. This passphrase is used to encrypt the private key stored on disk.    
     
-* Add Go DANE proxy to your web browser `127.0.0.1:8080` (see [Firefox instructions](doc/firefox.md)). Make sure to add it for HTTPS as well. 
+* Add Go DANE proxy to your web browser `127.0.0.1:8080` for HTTP/HTTPS.
 
-* Visit `http://godane.test` and click install certificate.
+* Import the certificate file `cert.crt` stored at `~/.godane` into your browser.
 
 
-
-Note: When you run Go DANE for the first time, it will generate a root CA and store it in `~/.godane`.
 The easiest way to try it out is to use Firefox because it supports adding a proxy natively and has a built in CA store so that you don't have to add the root CA or proxy to your whole OS (it's still experimental). 
 
-#### Some sites that currently use DANE-EE(3):
+Use `godane -help` to see command line options. 
+
+ Some sites that currently use DANE-EE:
 * FreeBSD: https://freebsd.org
 
 * Tor Project: https://torproject.org
 
 * Kumari https://www.kumari.net/
 
-and more?
 
 ### Go DANE with handshake.org
 
@@ -60,20 +62,23 @@ You can also use [easyhandshake](https://easyhandshake.com) resolver.
     
 Note: You can configure hsd to use a different port if 53 is in use.
 
+Some handshake sites
+
+* https://3b
+* https://proofofconcept
+
 ## Use of resolvers
 
-Go DANE doesn't perform DNSSEC verficiation by itself. The resolver you specify must be DNSSEC capable. If you have a local resolver that is DNSSEC capable, you can use udp or tcp. If not, please use a trusted resolver that supports DNSSEC and uses DOT or DOH.
+Go DANE doesn't perform DNSSEC verification by itself. The resolver you specify must be DNSSEC capable. If you have a local validating resolver, you can use udp/tcp. If not, please use a trusted resolver that supports DNSSEC and communicates over a secure channel.
 
-Note: Go DANE will ignore TLSA responses that don't come with the [Authenticaed Data (AD)](https://tools.ietf.org/html/rfc3655) flag.
+Note: for Go DANE to know the dns response is validated, the resolver must set the  Authenticated Data (AD) flag to true.
+
 
 ## Why?
 
-I wanted to use DANE/TLSA, but no browser currently supports it. Also, it appears that it's [not possible](https://www.dnssec-validator.cz/) to support it via an extension. So this seemed like a fun idea to try, and with [martian](https://github.com/google/martian), it was pretty easy.
+I wanted to try DANE, but no browser currently supports it. It may still be a long way to go for browser support, but if you want to try it now you can!
 
-
- 
 ## Contributing
-
 Contributions are welcome! 
 
 

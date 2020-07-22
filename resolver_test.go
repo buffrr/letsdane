@@ -21,7 +21,7 @@ func TestNewResolver(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			ips, err := rs.lookupIPv4("ip.godane.buffrr.dev")
+			ips, err := rs.lookupIPv4("example.com", true)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -47,18 +47,42 @@ func TestDNS_LookupIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	ips, err := rs.LookupIP("ip.godane.buffrr.dev")
+	ips, err := rs.LookupIP("example.com", true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(ips) != 4 {
-		t.Fatalf("want 4 ips, got %d ips", len(ips))
+	if len(ips) != 2 {
+		t.Fatalf("want 2 ips, got %d ips", len(ips))
 	}
 
-	_, err = rs.LookupIP("ip.godane.invalid")
+	_, err = rs.LookupIP("no-thanks.invalid", false)
 	if err == nil {
 		t.Fatal("want error, got nil")
+	}
+
+	rs, err = NewResolver("udp://a.iana-servers.net")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// authoritative answers are not authenticated
+	ips, err = rs.LookupIP("example.com", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ips) != 0 {
+		t.Fatalf("want no ips, got %d", len(ips))
+	}
+
+	ips, err = rs.LookupIP("example.com", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(ips) != 2 {
+		t.Fatalf("want 2 ips, got %d", len(ips))
 	}
 }
 
@@ -73,17 +97,27 @@ var tlsaRRs = []dns.TLSA{
 
 func TestDNS_LookupTLSA(t *testing.T) {
 	t.Parallel()
-	d, _ := NewResolver("tls://9.9.9.9")
-	r, _ := d.LookupTLSA("tlsa.godane.buffrr.dev")
 
-	if len(r) != 1 {
-		t.Fatalf("want 1, got %d", len(r))
+	rs, _ := NewResolver("tls://9.9.9.9")
+	ans, err := rs.LookupTLSA("tlsa.godane.buffrr.dev")
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	r[0].Hdr = tlsaRRs[0].Hdr
+	if len(ans) != 1 {
+		t.Fatalf("want 1, got %d", len(ans))
+	}
 
-	if !reflect.DeepEqual(r[0], tlsaRRs[0]) {
-		t.Fatalf("want %v, got %v", tlsaRRs[0], r[0])
+	ans[0].Hdr = tlsaRRs[0].Hdr
+
+	if !reflect.DeepEqual(ans[0], tlsaRRs[0]) {
+		t.Fatalf("want %v, got %v", tlsaRRs[0], ans[0])
+	}
+
+	rs, _ = NewResolver("udp://aiden.ns.cloudflare.com")
+	ans, err = rs.LookupTLSA("tlsa.godane.buffrr.dev")
+	if err == nil {
+		t.Fatal("want error, got nil")
 	}
 
 }
