@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -66,9 +67,6 @@ func TestRoundTripperTLS(t *testing.T) {
 		domain: "example.com",
 		ip:     net.ParseIP(host),
 	}
-
-	testx, _ := rs.LookupIP("example.com", false)
-	fmt.Println(testx)
 
 	client := ts.Client()
 	client.Transport = RoundTripper(rs, nil)
@@ -187,7 +185,11 @@ func testCreateCertTLSAPair(usage, selector, matching uint8) (tls.Certificate, *
 	if err != nil {
 		log.Fatal(err)
 	}
-	mc := m.tlsForHost("example.com")
+	mc := m.tlsForHost("example.com", &goproxy.ProxyCtx{
+		Proxy: &goproxy.ProxyHttpServer{
+			Logger: log.New(os.Stderr, "",0),
+		},
+	})
 	cert, err := mc.GetCertificate(&tls.ClientHelloInfo{
 		ServerName: "example.com",
 	})

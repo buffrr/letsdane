@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -43,7 +42,7 @@ func RoundTripper(rs Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
 
 			if cdata, ok := gContext.UserData.(*authResult); ok {
 				tlsConfig := newTLSVerifyConfig(cdata.TLSA)
-				return dialTLS(network, address, tlsConfig, cdata)
+				return dialTLS(network, address, tlsConfig, cdata, gContext)
 			}
 
 			return nil, fmt.Errorf("address %s not reachable", address)
@@ -127,7 +126,7 @@ func dialContext(ctx context.Context, network, addr string, rs Resolver) (net.Co
 
 }
 
-func dialTLS(network, addr string, config *tls.Config, cdata *authResult) (*tls.Conn, error) {
+func dialTLS(network, addr string, config *tls.Config, cdata *authResult, ctx *goproxy.ProxyCtx) (*tls.Conn, error) {
 	config.ServerName = cdata.Host
 
 	for _, ip := range cdata.IPs {
@@ -138,7 +137,7 @@ func dialTLS(network, addr string, config *tls.Config, cdata *authResult) (*tls.
 				return nil, err
 			}
 
-			log.Printf("dialing %s for host %s failed: %v", ipaddr, addr, err)
+			ctx.Logf("dialing %s for host %s failed: %v", ipaddr, addr, err)
 			continue
 		}
 		return conn, nil

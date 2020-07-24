@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
-	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"time"
@@ -28,16 +26,16 @@ type Config struct {
 	Verbose     bool
 }
 
-func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) {
+func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) error {
 	if c.Certificate != nil && c.PrivateKey != nil {
 		mc, err := newMITMConfig(c.Certificate, c.PrivateKey, c.Validity, "DNSSEC")
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
 
 		tlsConfig := func(host string, ctx *goproxy.ProxyCtx) (*tls.Config, error) {
 			host, _, _ = net.SplitHostPort(host)
-			return mc.tlsForHost(host), nil
+			return mc.tlsForHost(host, ctx), nil
 		}
 
 		goproxy.OkConnect = &goproxy.ConnectAction{Action: goproxy.ConnectAccept, TLSConfig: tlsConfig}
@@ -48,18 +46,18 @@ func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) {
 		var checkMITM goproxy.ReqConditionFunc = func(req *http.Request, ctx *goproxy.ProxyCtx) bool {
 			host, port, err := net.SplitHostPort(req.Host)
 			if err != nil {
-				log.Printf("invalid host %s", req.Host)
+				ctx.Logf("invalid host %s", req.Host)
 				return false
 			}
 
 			ips, err := c.Resolver.LookupIP(host, true)
 			if err != nil {
-				log.Printf("ip lookup for host %s failed %v", req.Host, err)
+				ctx.Logf("ip lookup for host %s failed %v", req.Host, err)
 				return false
 			}
 
 			if len(ips) == 0 {
-				log.Printf("no authenticated ip addresses were found skipping mitm")
+				ctx.Logf("no authenticated ip addresses were found skipping mitm")
 				return false
 			}
 
@@ -68,7 +66,7 @@ func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) {
 
 			if err == nil {
 				if !TLSASupported(ans) {
-					log.Printf("host %s has no supported tlsa records skipping mitm", req.Host)
+					ctx.Logf("host %s has no supported tlsa records skipping mitm", req.Host)
 					return false
 				}
 
@@ -82,24 +80,23 @@ func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) {
 				return true
 			}
 
-			log.Printf("tlsa lookup failed: %v, skipping mitm", err)
+			ctx.Logf("tlsa lookup failed: %v, skipping mitm", err)
 			return false
 		}
 
 		p.OnRequest(checkMITM).HandleConnect(goproxy.AlwaysMitm)
 	}
+
+	return nil
 }
 
 func (c *Config) Run(addr string) error {
-	if !c.Verbose {
-		log.SetFlags(0)
-		log.SetOutput(ioutil.Discard)
-	}
-
 	p := goproxy.NewProxyHttpServer()
 	p.ConnectDial = GetDialFunc(c.Resolver)
 	p.Verbose = c.Verbose
-	c.setupMITM(p)
+	if err := c.setupMITM(p) ; err != nil {
+		return err
+	}
 
 	// do our own round tripping
 	p.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
@@ -107,10 +104,11 @@ func (c *Config) Run(addr string) error {
 			tr := RoundTripper(c.Resolver, ctx)
 			resp, err = tr.RoundTrip(req)
 
-			log.Printf("round trip completed for %s", req.Host)
+			ctx.Logf("round trip completed for %s", req.Host)
+
 			if err != nil {
-				err = fmt.Errorf("unable to proxy this request: %v", err)
-				log.Println(err)
+				ctx.Warnf("host: %s: %v", req.Host, err)
+				err = fmt.Errorf("unable to proxy %s: %v", req.Host, err)
 			}
 
 			return

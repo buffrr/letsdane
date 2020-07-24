@@ -12,7 +12,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"log"
+	"github.com/elazarl/goproxy"
 	"math/big"
 	"net"
 	"sync"
@@ -132,7 +132,7 @@ func newMITMConfig(ca *x509.Certificate, privateKey interface{}, validity time.D
 
 // tlsForHost returns a *tls.mitmConfig that will generate certificates on-the-fly
 // using the provided hostname
-func (c *mitmConfig) tlsForHost(hostname string) *tls.Config {
+func (c *mitmConfig) tlsForHost(hostname string, ctx *goproxy.ProxyCtx) *tls.Config {
 	return &tls.Config{
 		InsecureSkipVerify: false,
 		GetCertificate: func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
@@ -140,13 +140,13 @@ func (c *mitmConfig) tlsForHost(hostname string) *tls.Config {
 				return nil, fmt.Errorf("hostname %s does not match server name %s", hostname, clientHello.ServerName)
 			}
 
-			return c.cert(hostname)
+			return c.cert(hostname, ctx)
 		},
 		NextProtos: []string{"http/1.1"},
 	}
 }
 
-func (c *mitmConfig) cert(hostname string) (*tls.Certificate, error) {
+func (c *mitmConfig) cert(hostname string, ctx *goproxy.ProxyCtx) (*tls.Certificate, error) {
 	// Remove the port if it exists.
 	host, _, err := net.SplitHostPort(hostname)
 	if err == nil {
@@ -158,7 +158,7 @@ func (c *mitmConfig) cert(hostname string) (*tls.Certificate, error) {
 	c.certmu.RUnlock()
 
 	if ok {
-		log.Printf("cache hit for %s", hostname)
+		ctx.Logf("mitm cert: cache hit for %s", hostname)
 
 		// Check validity of the certificate for hostname match, expiry, etc. In
 		// particular, if the cached certificate has expired, create a new one.
@@ -169,10 +169,10 @@ func (c *mitmConfig) cert(hostname string) (*tls.Certificate, error) {
 			return tlsc, nil
 		}
 
-		log.Printf("invalid certificate in cache for %s", hostname)
+		ctx.Logf("mitm cert: invalid certificate in cache for %s", hostname)
 	}
 
-	log.Printf("cache miss for %s", hostname)
+	ctx.Logf("mitm cert: cache miss for %s", hostname)
 
 	serial, err := rand.Int(rand.Reader, maxSerialNumber)
 	if err != nil {
