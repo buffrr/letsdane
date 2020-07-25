@@ -22,6 +22,9 @@ Go DANE enables the use of [DANE (DNS Based Authentication of Named Entities)](h
 Go DANE acts as a middleman between the browser and DANE enabled sites. It will check if a domain supports it, and generate a certificate on the fly if the authentication was successful. The connection will remain encrypted between you and the end server. If a website doesn't support DANE, its original certificate will be served instead.
 
 For this to work, Go DANE generates a local certificate authority that must be installed in your browser's certificate store. This CA is used to issue certificates for successful DANE authentications.
+
+<img src="howitworks.png" width="600px" alt="Go DANE authentication process"/>
+
 ## Usage
 
 You can build it from source using `go build github.com/buffrr/godane/cmd/godane` or download a binary for your OS from [releases](https://github.com/buffrr/godane/releases)
