@@ -29,8 +29,9 @@ type ClientResolver struct {
 }
 
 const (
-	minTTL = 10 * time.Second
-	maxTTL = 3 * time.Hour
+	maxAttempts = 3
+	minTTL      = 10 * time.Second
+	maxTTL      = 3 * time.Hour
 	// max cache len for each rr type
 	maxCache = 10000
 )
@@ -94,10 +95,19 @@ func parseAddress(server string) (string, string, error) {
 }
 
 func (rs *ClientResolver) exchange(m *dns.Msg) (r *dns.Msg, rtt time.Duration, err error) {
-	if rs.protocol == "https" {
-		return rs.exchangeDOH(m)
+	for i := 0; i < maxAttempts; i++ {
+		if rs.protocol == "https" {
+			r, rtt, err = rs.exchangeDOH(m)
+		} else {
+			r, rtt, err = rs.client.Exchange(m, rs.address)
+		}
+
+		if err == nil {
+			return
+		}
 	}
-	return rs.client.Exchange(m, rs.address)
+
+	return
 }
 
 func (rs *ClientResolver) exchangeDOH(m *dns.Msg) (r *dns.Msg, rtt time.Duration, err error) {
