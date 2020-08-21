@@ -25,10 +25,19 @@ For this to work, Go DANE generates a local certificate authority that must be i
 
 <img src="howitworks.png" width="600px" alt="Go DANE authentication process"/>
 
+## TODO
+
+* Full client-side DNSSEC validation using libunbound.
+* Create a Firefox & Chrome extension to use the proxy only on DANE enabled sites. A single TLSA lookup can determine if the request should be proxied. This should create a significant performance improvement because there is no need to proxy 99%+ of websites that don't use DANE.
+* Use the operating system's secure credential store to store the CA private key.
+* Maybe a GUI/system tray separate from cmd client?
+* Remove explicitly specifying udp or tcp (libunbound should take care of that once it's used). 
+
 ## Usage
 
 You can build it from source using `go build github.com/buffrr/godane/cmd/godane` or download a binary for your OS from [releases](https://github.com/buffrr/godane/releases)
- 
+
+Note: tls://1.1.1.1 is only used for quick testing here. You must have a local DNSSEC validating resolver which is not yet available in godane, but you can install one on your machine very easily.
 
 
     ./godane -dns tls://1.1.1.1
@@ -49,8 +58,6 @@ Use `godane -help` to see command line options.
 
 * Tor Project: https://torproject.org
 
-* Kumari https://www.kumari.net/
-
 
 ### Go DANE with handshake.org
 
@@ -58,21 +65,23 @@ If you're running a local hsd node listening for dns queries:
 
     ./godane -dns udp://:53
 
-You can also use [easyhandshake](https://easyhandshake.com) resolver.
+You can also use [easyhandshake](https://easyhandshake.com) resolver to test it without a local node (you must have your own node to use it securely).
 
     ./godane -dns https://easyhandshake.com:8053
     
     
-Note: You can configure hsd to use a different port if 53 is in use.
 
 Some handshake sites
 
 * https://3b
 * https://proofofconcept
 
+
+
+
 ## Use of resolvers
 
-Go DANE doesn't perform DNSSEC verification by itself. The resolver you specify must be DNSSEC capable. If you have a local validating resolver, you can use udp/tcp. If not, please use a trusted resolver that supports DNSSEC and communicates over a secure channel.
+Go DANE doesn't perform DNSSEC verification by itself (yet). The resolver you specify must be DNSSEC capable. If you have a local validating resolver, you can use it. If not don't use godane yet. If you just want to test it out, use a trusted resolver that supports DNSSEC and communicates over a secure channel. Still, you should know that this resolver will technically be your certificate authority!
 
 Note: for Go DANE to know the dns response is validated, the resolver must set the  Authenticated Data (AD) flag to true.
 
