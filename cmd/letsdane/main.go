@@ -2,29 +2,33 @@ package main
 
 import (
 	"bytes"
-	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
 	"flag"
 	"fmt"
-	"github.com/buffrr/godane"
+	"github.com/buffrr/letsdane"
+	rs "github.com/buffrr/letsdane/resolver"
 	"golang.org/x/crypto/ssh/terminal"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"path"
+	"strings"
 	"time"
 )
 
 var (
-	resolver = flag.String("dns", "tls://1.1.1.1", "resolver supports udp://, tcp://, tls:// or https://")
-	conf     = flag.String("conf", "", "dir path to store configuration (default: ~/.godane)")
+	raddr    = flag.String("r", "", "dns resolvers to use (default: /etc/resolv.conf)")
+	output   = flag.String("o", "", "path to export the public CA file")
+	conf     = flag.String("conf", "", "dir path to store configuration (default: ~/.letsdane)")
 	addr     = flag.String("addr", ":8080", "host:port of the proxy")
 	certPath = flag.String("cert", "", "filepath to custom CA")
 	keyPath  = flag.String("key", "", "filepath to the CA's private key")
-	pass     = flag.String("pass", "", "passphrase for the private key to avoid being prompted")
+	anchor   = flag.String("anchor", "", "path to trust anchor file (default: hardcoded 2017 KSK)")
 	verbose  = flag.Bool("verbose", false, "verbose output for debugging")
+	ad       = flag.Bool("skip-dnssec", false, "check ad flag only without dnssec validation")
 	validity = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
 )
 
@@ -38,7 +42,7 @@ func getConfPath() string {
 		log.Fatalf("failed to get home dir: %v", err)
 	}
 
-	p := path.Join(home, ".godane")
+	p := path.Join(home, ".letsdane")
 
 	if _, err := os.Stat(p); err != nil {
 		if err := os.Mkdir(p, 0700); err != nil {
@@ -50,10 +54,6 @@ func getConfPath() string {
 }
 
 func readPassword(confirm bool) string {
-	if *pass != "" {
-		return *pass
-	}
-
 	fmt.Print("enter passphrase: ")
 	input, err := terminal.ReadPassword(0)
 	fmt.Println()
@@ -76,8 +76,7 @@ func readPassword(confirm bool) string {
 		log.Fatal("passphrase didn't match")
 	}
 
-	*pass = string(input)
-	return *pass
+	return string(input)
 }
 
 func getOrCreateCA() (string, string) {
@@ -94,8 +93,6 @@ func getOrCreateCA() (string, string) {
 			if err != nil {
 				log.Fatalf("couldn't generate CA: %v", err)
 			}
-
-			password := readPassword(true)
 
 			certOut, err := os.Create(certPath)
 			if err != nil {
@@ -120,19 +117,8 @@ func getOrCreateCA() (string, string) {
 			}
 			defer kOut.Close()
 
-			if password == "" {
-				kOut.Write(privOut.Bytes())
-				return certPath, keyPath
-			}
-
-			block, err := x509.EncryptPEMBlock(rand.Reader, "RSA PRIVATE KEY", privOut.Bytes(),
-				[]byte(password), x509.PEMCipherAES256)
-
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			pem.Encode(kOut, block)
+			kOut.Write(privOut.Bytes())
+			return certPath, keyPath
 		}
 	}
 	return certPath, keyPath
@@ -187,11 +173,96 @@ func parseCA() (*x509.Certificate, interface{}) {
 	return nil, nil
 }
 
-func main() {
-	flag.Parse()
-	rs, err := godane.NewResolver(*resolver)
+func isLoopback(r string) bool {
+	var ip net.IP
+	host, _, err := net.SplitHostPort(r)
+
+	if err == nil {
+		ip = net.ParseIP(host)
+	} else {
+		ip = net.ParseIP(r)
+	}
+
+	return ip != nil && ip.IsLoopback()
+}
+
+func exportCA() {
+	b, err := ioutil.ReadFile(*certPath)
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if err := ioutil.WriteFile(*output, b, 0600); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func setupUnbound(u *rs.Unbound) error {
+	if *anchor != "" {
+		if err := u.AddTAFile(*anchor) ; err != nil {
+			log.Fatalf("unbound: %v", err)
+		}
+	}
+
+	if *raddr != "" {
+		addrs := strings.Split(*raddr, " ")
+		for _, r := range addrs {
+			r = strings.TrimSpace(r)
+			if r == "" {
+				continue
+			}
+
+			ip, port, err := net.SplitHostPort(r)
+			if err != nil {
+				port = "53"
+				ip = r
+			}
+
+			if err := u.SetFwd(ip + "@" + port) ; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	}
+
+	// falls back to root hints if no /etc/resolv.conf
+	_ = u.ResolvConf("/etc/resolv.conf")
+
+	return nil
+}
+
+func main() {
+	flag.Parse()
+	var resolver rs.Resolver
+
+	if *ad {
+		if !isLoopback(*raddr) {
+			log.Printf("WARNING: you must have a local dnssec capable resolver to use Go DANE securely")
+			log.Printf("WARNING: '%s' is not a loopback address!", *raddr)
+		}
+
+		ad, err := rs.NewAD(*raddr)
+		if err != nil {
+			log.Fatal(err)
+		}
+		resolver = ad
+
+	} else {
+		u, err := rs.NewUnbound()
+		if err == rs.ErrUnboundNotAvail {
+			log.Fatal("Go DANE has not been compiled with unbound. if you have a local dnssec capable resolver, run with -skip-dnssec")
+		}
+		if err != nil {
+			log.Fatalf("unbound: %v", err)
+		}
+
+		if err := setupUnbound(u) ; err != nil {
+			log.Fatalf("unbound: %v", err)
+		}
+
+		defer u.Destroy()
+		resolver = u
 	}
 
 	ca, priv := parseCA()
@@ -199,8 +270,12 @@ func main() {
 		Certificate: ca,
 		PrivateKey:  priv,
 		Validity:    *validity,
-		Resolver:    rs,
+		Resolver:    resolver,
 		Verbose:     *verbose,
+	}
+
+	if *output != "" {
+		exportCA()
 	}
 
 	log.Println("starting proxy on ", *addr)

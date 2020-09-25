@@ -1,5 +1,6 @@
-package godane
+package resolver
 
+// basic caching for ad resolver
 import (
 	"github.com/miekg/dns"
 	"sync"
@@ -7,9 +8,9 @@ import (
 )
 
 type entry struct {
-	msg []dns.RR
-	ad  bool
-	ttl time.Time
+	msg    []dns.RR
+	secure bool
+	ttl    time.Time
 }
 
 type cache struct {

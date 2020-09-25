@@ -1,31 +1,21 @@
-package godane
+package resolver
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"github.com/miekg/dns"
-	"io/ioutil"
 	"net"
-	"net/http"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
 
-// Resolver used for dns lookups
-type Resolver interface {
-	LookupIP(string, bool) ([]net.IP, error)
-	LookupTLSA(string) ([]dns.TLSA, error)
-}
-
 // ClientResolver implements Resolver and caches queries.
-type ClientResolver struct {
+type AD struct {
 	rrCache  map[uint16]*cache
 	client   *dns.Client
-	protocol string
 	address  string
+	exchangeFunc  func (m *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error)
 }
 
 const (
@@ -33,75 +23,44 @@ const (
 	minTTL      = 10 * time.Second
 	maxTTL      = 3 * time.Hour
 	// max cache len for each rr type
-	maxCache = 10000
+	maxCache = 5000
 )
 
-// NewResolver creates a new resolver
-// the server can be specified using udp://, tcp://, tls:// or https://
-func NewResolver(server string) (*ClientResolver, error) {
-	address, protocol, err := parseAddress(server)
+func parseSimpleAddr(server string) (string, error) {
+	_, _, err := net.SplitHostPort(server)
+	if err == nil {
+		return server, nil
+	}
+
+	return net.JoinHostPort(server, "53"), nil
+}
+
+// NewAD creates a new ad resolver
+func NewAD(server string) (*AD, error) {
+	addr, err := parseSimpleAddr(server)
 	if err != nil {
 		return nil, err
 	}
 
 	client := new(dns.Client)
-	client.Net = protocol
+	// TODO: switch to tcp if truncated?
+	client.Net = "udp"
 	rrCache := make(map[uint16]*cache)
 	rrCache[dns.TypeA] = newCache(maxCache)
 	rrCache[dns.TypeAAAA] = newCache(maxCache)
 	rrCache[dns.TypeTLSA] = newCache(maxCache)
 
-	return &ClientResolver{
+	return &AD{
 		rrCache:  rrCache,
 		client:   client,
-		protocol: protocol,
-		address:  address,
+		address:  addr,
+		exchangeFunc: exchange,
 	}, nil
 }
 
-func parseAddress(server string) (string, string, error) {
-	u, err := url.Parse(server)
-	if err != nil {
-		return "", "", fmt.Errorf("couldn't parse server address: %v", err)
-	}
-
-	var p, defaultPort string
-	host := u.Host
-
-	switch u.Scheme {
-	case "udp":
-		defaultPort = "53"
-		p = ""
-	case "tcp":
-		p = u.Scheme
-		defaultPort = "53"
-	case "tls":
-		p = "tcp-tls"
-		defaultPort = "853"
-	case "https":
-		p = u.Scheme
-		host = u.Scheme + "://" + u.Host
-	default:
-		return "", "", fmt.Errorf("unsupported scheme %s", u.Scheme)
-	}
-
-	_, _, err = net.SplitHostPort(u.Host)
-	if err != nil && u.Scheme != "https" {
-		return net.JoinHostPort(host, defaultPort), p, nil
-	}
-
-	return host, p, nil
-
-}
-
-func (rs *ClientResolver) exchange(m *dns.Msg) (r *dns.Msg, rtt time.Duration, err error) {
+func exchange(m *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
 	for i := 0; i < maxAttempts; i++ {
-		if rs.protocol == "https" {
-			r, rtt, err = rs.exchangeDOH(m)
-		} else {
-			r, rtt, err = rs.client.Exchange(m, rs.address)
-		}
-
+		r, rtt, err = client.Exchange(m, addr)
 		if err == nil {
 			return
 		}
@@ -110,42 +69,7 @@ func (rs *ClientResolver) exchange(m *dns.Msg) (r *dns.Msg, rtt time.Duration, e
 	return
 }
 
-func (rs *ClientResolver) exchangeDOH(m *dns.Msg) (r *dns.Msg, rtt time.Duration, err error) {
-	buf, err := m.Pack()
-	if err != nil {
-		return nil, 0, err
-	}
-
-	req, err := http.NewRequest(http.MethodPost, rs.address+"/dns-query", bytes.NewReader(buf))
-	if err != nil {
-		return nil, 0, err
-	}
-
-	req.Header.Set("content-type", "application/dns-message")
-	req.Header.Set("accept", "application/dns-message")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, 0, fmt.Errorf("error fetching response %s", resp.Status)
-	}
-
-	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, 0, err
-	}
-
-	ans := new(dns.Msg)
-	err = ans.Unpack(b)
-
-	return ans, 0, err
-}
-
-func (rs *ClientResolver) checkCache(key string, qtype uint16) (*entry, bool) {
+func (rs *AD) checkCache(key string, qtype uint16) (*entry, bool) {
 	if ans, ok := rs.rrCache[qtype].get(key); ok {
 		if time.Now().Before(ans.ttl) {
 			return ans, true
@@ -158,8 +82,8 @@ func (rs *ClientResolver) checkCache(key string, qtype uint16) (*entry, bool) {
 }
 
 // LookupIP looks up host using the specified resolver.
-// It returns a slice of that host's IPv4 and IPv6 addresses.
-func (rs *ClientResolver) LookupIP(hostname string, secure bool) ([]net.IP, error) {
+// It returns a slice of the host's IPv4 and IPv6 addresses.
+func (rs *AD) LookupIP(hostname string, secure bool) ([]net.IP, error) {
 	ip := net.ParseIP(hostname)
 	if ip != nil {
 		if secure {
@@ -202,7 +126,7 @@ func (rs *ClientResolver) LookupIP(hostname string, secure bool) ([]net.IP, erro
 	return append(ipv4, ipv6...), nil
 }
 
-func (rs *ClientResolver) lookupIPv4(hostname string, secure bool) ([]net.IP, error) {
+func (rs *AD) lookupIPv4(hostname string, secure bool) ([]net.IP, error) {
 	rr, ad, err := rs.lookup(hostname, dns.TypeA)
 	if err != nil {
 		return nil, err
@@ -222,7 +146,7 @@ func (rs *ClientResolver) lookupIPv4(hostname string, secure bool) ([]net.IP, er
 	return ips, nil
 }
 
-func (rs *ClientResolver) lookupIPv6(hostname string, secure bool) ([]net.IP, error) {
+func (rs *AD) lookupIPv6(hostname string, secure bool) ([]net.IP, error) {
 	rr, ad, err := rs.lookup(hostname, dns.TypeAAAA)
 	if err != nil {
 		return nil, err
@@ -241,31 +165,40 @@ func (rs *ClientResolver) lookupIPv6(hostname string, secure bool) ([]net.IP, er
 	return ips, nil
 }
 
-// LookupTLSA returns TLSA records for the given TLSA prefix.
-func (rs *ClientResolver) LookupTLSA(prefix string) ([]dns.TLSA, error) {
-	rr, ad, err := rs.lookup(prefix, dns.TypeTLSA)
+// LookupTLSA finds the TLSA resource record
+func (rs *AD) LookupTLSA(service, proto, name string, secure bool) ([]*dns.TLSA, error) {
+	if net.ParseIP(name) != nil || !shouldResolve(name) {
+		return []*dns.TLSA{}, nil
+	}
+
+	q, err := dns.TLSAName(dns.Fqdn(name), service, proto)
 	if err != nil {
 		return nil, err
 	}
 
-	if !ad {
-		return nil, errors.New("tlsa response not authenticated")
+	rr, ad, err := rs.lookup(q, dns.TypeTLSA)
+	if err != nil {
+		return nil, err
 	}
 
-	var tr []dns.TLSA
+	if !ad && secure {
+		return []*dns.TLSA{}, nil
+	}
+
+	var tr []*dns.TLSA
 	for _, r := range rr {
 		switch t := r.(type) {
 		case *dns.TLSA:
-			tr = append(tr, *t)
+			tr = append(tr, t)
 		}
 	}
 
 	return tr, nil
 }
 
-func (rs *ClientResolver) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
+func (rs *AD) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 	if ans, ok := rs.checkCache(name, qtype); ok {
-		return ans.msg, ans.ad, nil
+		return ans.msg, ans.secure, nil
 	}
 
 	m := new(dns.Msg)
@@ -273,24 +206,32 @@ func (rs *ClientResolver) lookup(name string, qtype uint16) ([]dns.RR, bool, err
 	m.RecursionDesired = true
 	m.AuthenticatedData = true
 
-	r, _, err := rs.exchange(m)
+	r, _, err := rs.exchangeFunc(m, rs.address, rs.client)
 	if err != nil {
 		return nil, false, err
 	}
 
 	if r.Truncated {
-		return nil, false, errors.New("dns response truncated")
+		return nil, false, errors.New("ad: response truncated")
 	}
 
-	e := &entry{
-		msg: r.Answer,
-		ad:  r.AuthenticatedData,
-		ttl: time.Now().Add(getMinTTL(r)),
+	if r.Rcode == dns.RcodeServerFailure {
+		return nil, false, ErrServFail
 	}
 
-	rs.rrCache[qtype].set(name, e)
+	if r.Rcode == dns.RcodeSuccess || r.Rcode == dns.RcodeNameError {
+		e := &entry{
+			msg:    r.Answer,
+			secure: r.AuthenticatedData,
+			ttl:    time.Now().Add(getMinTTL(r)),
+		}
 
-	return e.msg, e.ad, nil
+		rs.rrCache[qtype].set(name, e)
+
+		return e.msg, e.secure, nil
+	}
+
+	return nil, false, fmt.Errorf("ad: lookup failed with rcode %d", r.Rcode)
 }
 
 // getMinTTL get the ttl for dns msg
