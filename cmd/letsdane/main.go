@@ -89,7 +89,7 @@ func getOrCreateCA() (string, string) {
 
 	if _, err := os.Stat(certPath); err != nil {
 		if _, err := os.Stat(keyPath); err != nil {
-			ca, priv, err := godane.NewAuthority("DNSSEC", "DNSSEC", 365*24*time.Hour)
+			ca, priv, err := letsdane.NewAuthority("DNSSEC", "DNSSEC", 365*24*time.Hour)
 			if err != nil {
 				log.Fatalf("couldn't generate CA: %v", err)
 			}
@@ -238,8 +238,8 @@ func main() {
 
 	if *ad {
 		if !isLoopback(*raddr) {
-			log.Printf("WARNING: you must have a local dnssec capable resolver to use Go DANE securely")
-			log.Printf("WARNING: '%s' is not a loopback address!", *raddr)
+			log.Printf("WARNING: you must have a local dnssec capable resolver to use letsdane securely")
+			log.Printf("WARNING: '%s' is not a loopback address (insecure)!", *raddr)
 		}
 
 		ad, err := rs.NewAD(*raddr)
@@ -251,7 +251,7 @@ func main() {
 	} else {
 		u, err := rs.NewUnbound()
 		if err == rs.ErrUnboundNotAvail {
-			log.Fatal("Go DANE has not been compiled with unbound. if you have a local dnssec capable resolver, run with -skip-dnssec")
+			log.Fatal("Let's DANE has not been compiled with unbound. if you have a local dnssec capable resolver, run with -skip-dnssec")
 		}
 		if err != nil {
 			log.Fatalf("unbound: %v", err)
@@ -266,7 +266,7 @@ func main() {
 	}
 
 	ca, priv := parseCA()
-	c := &godane.Config{
+	c := &letsdane.Config{
 		Certificate: ca,
 		PrivateKey:  priv,
 		Validity:    *validity,
