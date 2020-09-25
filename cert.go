@@ -1,7 +1,6 @@
-package godane
+package letsdane
 
-// adopted from github.com/google/martian/mitm
-// modified to use with godane and to make it work with goproxy
+// based on github.com/google/martian/mitm
 
 import (
 	"bytes"
