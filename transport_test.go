@@ -1,4 +1,4 @@
-package godane
+package letsdane
 
 import (
 	"bytes"
@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/buffrr/letsdane/resolver"
 	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
 	"io/ioutil"
@@ -22,14 +23,23 @@ import (
 	"time"
 )
 
-type TestResolver struct {
+type testResolver struct {
 	domain    string
 	ip        net.IP
 	tlsaPrefx string
-	tlsaRRs   []dns.TLSA
+	tlsaRRs   []*dns.TLSA
+	secure    bool
+	bogus     bool
 }
 
-func (rs TestResolver) LookupIP(name string, secure bool) ([]net.IP, error) {
+func (rs testResolver) LookupIP(name string, secure bool) ([]net.IP, error) {
+	if rs.bogus {
+		return nil, resolver.ErrServFail
+	}
+	if secure && !rs.secure {
+		return []net.IP{}, nil
+	}
+
 	if name == rs.domain {
 		return []net.IP{rs.ip}, nil
 	}
@@ -37,12 +47,36 @@ func (rs TestResolver) LookupIP(name string, secure bool) ([]net.IP, error) {
 	return nil, errors.New("no such host")
 }
 
-func (rs TestResolver) LookupTLSA(prefix string) ([]dns.TLSA, error) {
-	if prefix == rs.tlsaPrefx {
+func (rs testResolver) LookupTLSA(service, proto, name string, secure bool) ([]*dns.TLSA, error) {
+	if rs.bogus {
+		return nil, resolver.ErrServFail
+	}
+	if secure && !rs.secure {
+		return []*dns.TLSA{}, nil
+	}
+
+	n, _ := dns.TLSAName(dns.Fqdn(name), service, proto)
+	if n == rs.tlsaPrefx {
 		return rs.tlsaRRs, nil
 	}
 
 	return nil, errors.New("not found")
+}
+
+var tlsaRRs = []*dns.TLSA{
+	{
+		Usage:        3,
+		Selector:     1,
+		MatchingType: 1,
+		Certificate:  "781c71783fcd0d2c4b4b82ae7636fef5d0de94f99ce6192afdf2640357835e0b",
+	},
+	// invalid
+	{
+		Usage:        2,
+		Selector:     0,
+		MatchingType: 1,
+		Certificate:  "781c71783fcd0d2c4b4b82ae7636fef5d0de94f99ce6192afdf2640357835e0b",
+	},
 }
 
 func TestRoundTripperTLS(t *testing.T) {
@@ -58,12 +92,12 @@ func TestRoundTripperTLS(t *testing.T) {
 	ts.StartTLS()
 
 	// https://127.0.0.1:port => https://example.com:port
-	url, _ := url.Parse(ts.URL)
-	host, port, _ := net.SplitHostPort(url.Host)
+	u, _ := url.Parse(ts.URL)
+	host, port, _ := net.SplitHostPort(u.Host)
 	addr := net.JoinHostPort("example.com", port)
 	requrl := "https://" + addr
 
-	rs := TestResolver{
+	rs := testResolver{
 		domain: "example.com",
 		ip:     net.ParseIP(host),
 	}
@@ -74,13 +108,13 @@ func TestRoundTripperTLS(t *testing.T) {
 	// nil context
 	_, err := client.Get(requrl)
 	if err == nil {
-		t.Fatalf("want error, got nil")
+		t.Fatalf("want error")
 	}
 
 	// tlsa doesn't match server certificate
-	rs.tlsaPrefx = GetTLSAPrefix(addr)
+	rs.tlsaPrefx = resolver.GetTLSAPrefix(addr)
 	_, _, tlsa2 := testCreateCertTLSAPair(3, 1, 1)
-	rs.tlsaRRs = []dns.TLSA{tlsa2}
+	rs.tlsaRRs = []*dns.TLSA{&tlsa2}
 
 	authRes := &authResult{
 		TLSA: tlsaRRs,
@@ -94,11 +128,11 @@ func TestRoundTripperTLS(t *testing.T) {
 	})
 	_, err = client.Get(requrl)
 	if err == nil {
-		t.Fatalf("want error, got nil")
+		t.Fatalf("want error")
 	}
 
 	// good tlsa
-	rs.tlsaRRs = []dns.TLSA{goodTLSA}
+	rs.tlsaRRs = []*dns.TLSA{&goodTLSA}
 
 	authRes.TLSA = rs.tlsaRRs
 	client.Transport = RoundTripper(rs, &goproxy.ProxyCtx{
@@ -120,18 +154,18 @@ func TestRoundTripperTLS(t *testing.T) {
 	got := strings.TrimSpace(string(greeting))
 
 	if got != "hello" {
-		t.Fatalf("want `hello`, got `%s`", got)
+		t.Fatalf("have `%s`, want 'hello'", got)
 	}
 
 	// unsupported tlsa
 	_, _, tlsa3 := testCreateCertTLSAPair(1, 0, 1)
-	rs.tlsaRRs = []dns.TLSA{tlsa3}
+	rs.tlsaRRs = []*dns.TLSA{&tlsa3}
 	authRes.TLSA = rs.tlsaRRs
 	client.Transport = RoundTripper(rs, nil)
 	_, err = client.Get(requrl)
 
 	if err == nil {
-		t.Fatalf("want error, got nil")
+		t.Fatalf("want error")
 	}
 }
 
@@ -147,7 +181,7 @@ func TestRoundTripperNoTLS(t *testing.T) {
 	addr := net.JoinHostPort("example.com", port)
 	requrl := "http://" + addr
 
-	rs := TestResolver{
+	rs := &testResolver{
 		domain: "example.com",
 		ip:     net.ParseIP(host),
 	}
@@ -187,7 +221,7 @@ func testCreateCertTLSAPair(usage, selector, matching uint8) (tls.Certificate, *
 	}
 	mc := m.tlsForHost("example.com", &goproxy.ProxyCtx{
 		Proxy: &goproxy.ProxyHttpServer{
-			Logger: log.New(os.Stderr, "",0),
+			Logger: log.New(os.Stderr, "", 0),
 		},
 	})
 	cert, err := mc.GetCertificate(&tls.ClientHelloInfo{

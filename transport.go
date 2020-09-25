@@ -1,4 +1,4 @@
-package godane
+package letsdane
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"github.com/buffrr/letsdane/resolver"
 	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
 	"net"
@@ -26,26 +27,27 @@ var dialer = net.Dialer{
 	KeepAlive: KeepAlive,
 }
 
-var daneErr = errors.New("DANE verification failed")
+var daneErr = errors.New("transport: DANE verification failed")
 
 // RoundTripper returns a round tripper capable of performing DANE/TLSA
 // verification. Uses the given resolver for dns lookups.
-func RoundTripper(rs Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
+func RoundTripper(rs resolver.Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
 			return dialContext(ctx, network, addr, rs)
 		},
 		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			if gContext == nil || gContext.UserData == nil {
-				return nil, fmt.Errorf("no validation data given")
+			if gContext == nil {
+				return nil, fmt.Errorf("transport: no validation data in ctx")
 			}
-
 			if cdata, ok := gContext.UserData.(*authResult); ok {
+				if cdata.Fail != nil {
+					return nil, fmt.Errorf("transport: %v", cdata.Fail)
+				}
 				tlsConfig := newTLSVerifyConfig(cdata.TLSA)
 				return dialTLS(network, address, tlsConfig, cdata, gContext)
 			}
-
-			return nil, fmt.Errorf("address %s not reachable", address)
+			return nil, fmt.Errorf("transport: address %s not reachable", address)
 		},
 		TLSHandshakeTimeout:   TLSHandshakeTimeout,
 		ExpectContinueTimeout: ExpectContinueTimeout,
@@ -55,7 +57,7 @@ func RoundTripper(rs Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
 
 // TLSASupported checks if there is a supported DANE usage
 // from the given TLSA records. currently checks for usage EE(3).
-func TLSASupported(rrs []dns.TLSA) bool {
+func TLSASupported(rrs []*dns.TLSA) bool {
 	for _, rr := range rrs {
 		if rr.Usage == 3 {
 			return true
@@ -64,20 +66,20 @@ func TLSASupported(rrs []dns.TLSA) bool {
 	return false
 }
 
-func newTLSVerifyConfig(rrs []dns.TLSA) *tls.Config {
+func newTLSVerifyConfig(rrs []*dns.TLSA) *tls.Config {
 	return &tls.Config{
 		InsecureSkipVerify:    true,
 		VerifyPeerCertificate: getTLSAValidator(rrs),
 	}
 }
 
-func getTLSAValidator(rrs []dns.TLSA) func([][]byte, [][]*x509.Certificate) error {
+func getTLSAValidator(rrs []*dns.TLSA) func([][]byte, [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		certs := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
 			cert, err := x509.ParseCertificate(asn1Data)
 			if err != nil {
-				return errors.New("failed to parse certificate from server: " + err.Error())
+				return errors.New("transport: failed to parse certificate from server: " + err.Error())
 			}
 			certs[i] = cert
 		}
@@ -101,18 +103,19 @@ func getTLSAValidator(rrs []dns.TLSA) func([][]byte, [][]*x509.Certificate) erro
 }
 
 // GetDialFunc returns a dial function that uses the given resolver.
-func GetDialFunc(rs Resolver) func(network string, addr string) (net.Conn, error) {
+func GetDialFunc(rs resolver.Resolver) func(network string, addr string) (net.Conn, error) {
 	return func(network string, addr string) (net.Conn, error) {
 		return dialContext(context.Background(), network, addr, rs)
 	}
 }
 
-func dialContext(ctx context.Context, network, addr string, rs Resolver) (net.Conn, error) {
+func dialContext(ctx context.Context, network, addr string, rs resolver.Resolver) (net.Conn, error) {
 	_, port, ips, err := resolveAddr(addr, rs)
 	if err != nil {
 		return nil, err
 	}
 
+	// TODO: use async dialing
 	for _, ip := range ips {
 		ipaddr := net.JoinHostPort(ip.String(), port)
 		conn, err := dialer.DialContext(ctx, network, ipaddr)
@@ -122,13 +125,12 @@ func dialContext(ctx context.Context, network, addr string, rs Resolver) (net.Co
 		return conn, nil
 	}
 
-	return nil, fmt.Errorf("could not reach %s", addr)
-
+	return nil, fmt.Errorf("transport: could not reach %s", addr)
 }
 
 func dialTLS(network, addr string, config *tls.Config, cdata *authResult, ctx *goproxy.ProxyCtx) (*tls.Conn, error) {
 	config.ServerName = cdata.Host
-
+	// TODO: use async dialing
 	for _, ip := range cdata.IPs {
 		ipaddr := net.JoinHostPort(ip.String(), cdata.Port)
 		conn, err := tls.Dial(network, ipaddr, config)
@@ -137,16 +139,16 @@ func dialTLS(network, addr string, config *tls.Config, cdata *authResult, ctx *g
 				return nil, err
 			}
 
-			ctx.Logf("dialing %s for host %s failed: %v", ipaddr, addr, err)
+			ctx.Logf("transport: dialing %s for host %s failed: %v", ipaddr, addr, err)
 			continue
 		}
 		return conn, nil
 	}
 
-	return nil, fmt.Errorf("could not reach %s", addr)
+	return nil, fmt.Errorf("transport: could not reach %s", addr)
 }
 
-func resolveAddr(addr string, rs Resolver) (host, port string, ips []net.IP, err error) {
+func resolveAddr(addr string, rs resolver.Resolver) (host, port string, ips []net.IP, err error) {
 	host, port, err = net.SplitHostPort(addr)
 	if err != nil {
 		return
@@ -159,7 +161,7 @@ func resolveAddr(addr string, rs Resolver) (host, port string, ips []net.IP, err
 	}
 
 	if len(ips) == 0 {
-		err = fmt.Errorf("lookup %s no such host", addr)
+		err = fmt.Errorf("transport: lookup %s no such host", addr)
 		return
 	}
 
