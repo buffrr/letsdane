@@ -1,3 +1,4 @@
+
 # Let's DANE
 
 **Note: Let's DANE is still under development, use at your own risk.**
@@ -6,11 +7,23 @@
 Let's DANE enables the use of [DANE (DNS Based Authentication of Named Entities)](https://tools.ietf.org/html/rfc6698) in browsers using a simple proxy. It currently supports DANE-EE, and works with self-signed certificates.
 
 
+<p >
+<br>
+<br>
+<img src="https://github.com/buffrr/letsdane/raw/master/chrome.png" width="350px" alt="Let's DANE Handshake"/><br/>
+
+This domain is DNSSEC signed with <a href="https://ed25519.nl/">ed25519</a> on a decentralized name and CA system, handshake.org.   
+<br><br>
 
 
-<p align="center">
-<img src="screenshot.png" width="400px" alt="Let's DANE verified DNSSEC"/><br/>
+
+
+<img src="https://github.com/buffrr/letsdane/raw/master/screenshot.png" width="400px" alt="Let's DANE verified DNSSEC"/><br/>
+ 
+ torproject.org with DANE-EE validated certificate
+
 </p>
+
 
 ## How it works
 
@@ -33,7 +46,7 @@ Note: you can build without unbound, by removing `-tags unbound` and run let's d
 this is generally not recommended (you must have a local trusted dnssec resolver). By "local" I mean on your machine!
 let's dane will only check the authenticated data flag set by your resolver if `-skip-dnssec` is specified
 
-## Usage
+## Quick Usage
 
 Let's DANE will generate a CA and store it in ~/.letsdane when you start it for the first time. You can use the `-o` option to export the public cert file to a convenient location.
 
