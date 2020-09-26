@@ -7,23 +7,26 @@
 Let's DANE enables the use of [DANE (DNS Based Authentication of Named Entities)](https://tools.ietf.org/html/rfc6698) in browsers using a simple proxy. It currently supports DANE-EE, and works with self-signed certificates.
 
 
-<p >
+<p align="center">
 <br>
 <br>
-<img src="https://github.com/buffrr/letsdane/raw/master/chrome.png" width="350px" alt="Let's DANE Handshake"/><br/>
+<img src="https://github.com/buffrr/letsdane/raw/master/chrome.png" width="320px" alt="Let's DANE Handshake"/>
+</p>
 
+<p align="center">
 This domain is DNSSEC signed with <a href="https://ed25519.nl/">ed25519</a> on a decentralized name and CA system, handshake.org.   
 <br><br>
+</p>
 
 
-
-
+<p align="center">
 <img src="https://github.com/buffrr/letsdane/raw/master/screenshot.png" width="400px" alt="Let's DANE verified DNSSEC"/><br/>
- 
- torproject.org with DANE-EE validated certificate
 
 </p>
 
+<p align="center">
+torproject.org with DANE-EE validated certificate
+ </p>
 
 ## How it works
 
