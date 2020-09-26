@@ -20,16 +20,17 @@ import (
 )
 
 var (
-	raddr    = flag.String("r", "", "dns resolvers to use (default: /etc/resolv.conf)")
-	output   = flag.String("o", "", "path to export the public CA file")
-	conf     = flag.String("conf", "", "dir path to store configuration (default: ~/.letsdane)")
-	addr     = flag.String("addr", ":8080", "host:port of the proxy")
-	certPath = flag.String("cert", "", "filepath to custom CA")
-	keyPath  = flag.String("key", "", "filepath to the CA's private key")
-	anchor   = flag.String("anchor", "", "path to trust anchor file (default: hardcoded 2017 KSK)")
-	verbose  = flag.Bool("verbose", false, "verbose output for debugging")
-	ad       = flag.Bool("skip-dnssec", false, "check ad flag only without dnssec validation")
-	validity = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
+	raddr     = flag.String("r", "", "dns resolvers to use (default: /etc/resolv.conf)")
+	output    = flag.String("o", "", "path to export the public CA file")
+	conf      = flag.String("conf", "", "dir path to store configuration (default: ~/.letsdane)")
+	addr      = flag.String("addr", ":8080", "host:port of the proxy")
+	certPath  = flag.String("cert", "", "filepath to custom CA")
+	keyPath   = flag.String("key", "", "filepath to the CA's private key")
+	anchor    = flag.String("anchor", "", "path to trust anchor file (default: hardcoded 2017 KSK)")
+	verbose   = flag.Bool("verbose", false, "verbose output for debugging")
+	ad        = flag.Bool("skip-dnssec", false, "check ad flag only without dnssec validation")
+	skipICANN = flag.Bool("skip-icann", false, "Add all ICANN tlds to CA name constraints")
+	validity  = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
 )
 
 func getConfPath() string {
@@ -89,7 +90,7 @@ func getOrCreateCA() (string, string) {
 
 	if _, err := os.Stat(certPath); err != nil {
 		if _, err := os.Stat(keyPath); err != nil {
-			ca, priv, err := letsdane.NewAuthority("DNSSEC", "DNSSEC", 365*24*time.Hour)
+			ca, priv, err := letsdane.NewAuthority("DNSSEC", "DNSSEC", 365*24*time.Hour, *skipICANN)
 			if err != nil {
 				log.Fatalf("couldn't generate CA: %v", err)
 			}
@@ -199,7 +200,7 @@ func exportCA() {
 
 func setupUnbound(u *rs.Unbound) error {
 	if *anchor != "" {
-		if err := u.AddTAFile(*anchor) ; err != nil {
+		if err := u.AddTAFile(*anchor); err != nil {
 			log.Fatalf("unbound: %v", err)
 		}
 	}
@@ -218,7 +219,7 @@ func setupUnbound(u *rs.Unbound) error {
 				ip = r
 			}
 
-			if err := u.SetFwd(ip + "@" + port) ; err != nil {
+			if err := u.SetFwd(ip + "@" + port); err != nil {
 				return err
 			}
 		}
@@ -257,7 +258,7 @@ func main() {
 			log.Fatalf("unbound: %v", err)
 		}
 
-		if err := setupUnbound(u) ; err != nil {
+		if err := setupUnbound(u); err != nil {
 			log.Fatalf("unbound: %v", err)
 		}
 

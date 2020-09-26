@@ -20,7 +20,7 @@ Let's DANE acts as a trusted intermediary between the browser and DANE enabled s
 For this to work, Let's DANE generates a local certificate authority that must be installed in your browser's certificate store. This CA is used to issue certificates for successful DANE authentications.
 
 
-# Build from source
+## Build from source
 
 You can build the latest version from source for now. binaries in releases are not up to date yet.
 
@@ -33,7 +33,7 @@ Note: you can build without unbound, by removing `-tags unbound` and run let's d
 this is generally not recommended (you must have a local trusted dnssec resolver). By "local" I mean on your machine!
 let's dane will only check the authenticated data flag set by your resolver if `-skip-dnssec` is specified
 
-# Usage
+## Usage
 
 Let's DANE will generate a CA and store it in ~/.letsdane when you start it for the first time. You can use the `-o` option to export the public cert file to a convenient location.
 
@@ -57,14 +57,14 @@ Use `letsdane -help` to see command line options.
 * Tor Project: https://torproject.org
 
 
-## Let's DANE with handshake.org
+## Let's DANE with Handshake
 
-You can use hsd or hnsd. Specify address:port of the recursive handshake resolver
-you must have it local on your machine to use letsdane securely. 
-Add `-skip-dnssec` because it does not use a root ksk (handshake validates dnssec)
+You can use [hsd](https://github.com/handshake-org/hsd) or [hnsd](https://github.com/handshake-org/hnsd). Specify address:port of the recursive handshake resolver. You must have it local on your machine to use letsdane securely. 
+Add `-skip-dnssec` because it does not use a root ksk (handshake resolver validates dnssec).
 
-    ./letsdane -r 127.0.0.1:8585 -o myca.cert -skip-dnssec
+Add `-skip-icann` option to prevent the generated CA from issuing certificates for ICANN tlds (recommended)
 
+    ./letsdane -r 127.0.0.1:8585 -o myca.cert -skip-dnssec -skip-icann
 
 Some handshake sites
 

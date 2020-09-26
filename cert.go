@@ -41,7 +41,7 @@ type mitmConfig struct {
 
 // NewAuthority creates a new CA certificate and associated
 // private key.
-func NewAuthority(name, organization string, validity time.Duration) (*x509.Certificate, *rsa.PrivateKey, error) {
+func NewAuthority(name, organization string, validity time.Duration, constraints bool) (*x509.Certificate, *rsa.PrivateKey, error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, nil, err
@@ -79,6 +79,21 @@ func NewAuthority(name, organization string, validity time.Duration) (*x509.Cert
 		NotAfter:              time.Now().Add(validity),
 		DNSNames:              []string{name},
 		IsCA:                  true,
+		MaxPathLenZero:        true,
+	}
+
+	if constraints {
+		tmpl.PermittedDNSDomainsCritical = true
+		_, ipv4, _ := net.ParseCIDR("0.0.0.0/0")
+		_, ipv6, _ := net.ParseCIDR("::/0")
+		tmpl.ExcludedIPRanges = []*net.IPNet{ipv4, ipv6}
+
+		var names []string
+		for name := range nameConstraints {
+			names = append(names, "."+name)
+		}
+
+		tmpl.ExcludedDNSDomains = names
 	}
 
 	raw, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, pub, priv)
