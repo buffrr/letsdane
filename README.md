@@ -1,9 +1,5 @@
 # Let's DANE
 
-<a href="https://goreportcard.com/report/github.com/buffrr/letsdane"><img src="https://goreportcard.com/badge/github.com/buffrr/letsdane"/></a>
-<a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache%202.0-blue.svg"/></a>
-
-
 **Note: Let's DANE is still under development, use at your own risk.**
 
 
