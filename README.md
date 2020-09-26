@@ -19,15 +19,6 @@ Let's DANE acts as a trusted intermediary between the browser and DANE enabled s
 
 For this to work, Let's DANE generates a local certificate authority that must be installed in your browser's certificate store. This CA is used to issue certificates for successful DANE authentications.
 
-<img src="howitworks.png" width="600px" alt="Let's DANE authentication process"/>
-
-## TODO
-
-* ~~Full client-side DNSSEC validation using libunbound.~~
-* ~~Remove explicitly specifying udp or tcp (libunbound should take care of that once it's used).~~ 
-* Create a Firefox & Chrome extension to use the proxy only on DANE enabled sites. A single TLSA lookup can determine if the request should be proxied. There is no need to proxy 99%+ of websites that don't use DANE.
-* Use the operating system's secure credential store to store the CA private key.
-* Support running as a systray/menubar separate from cmd client?
 
 # Build from source
 
@@ -35,11 +26,11 @@ You can build the latest version from source for now. binaries in releases are n
 
 make sure you have libunbound installed and run
 
-    go get github.com/buffrr/letsdane
-    go build github.com/buffrr/letsdane/cmd/letsdane -tags unbound
+    git clone https://github.com/buffrr/letsdane.git && cd letsdane/cmd/letsdane
+    go build -tags unbound
 
 Note: you can build without unbound, by removing `-tags unbound` and run let's dane with `-skip-dnssec`
-this is generally not recommended (you must have a local trusted dnssec capable resolver). By "local" I mean on your machine!
+this is generally not recommended (you must have a local trusted dnssec resolver). By "local" I mean on your machine!
 let's dane will only check the authenticated data flag set by your resolver if `-skip-dnssec` is specified
 
 # Usage
@@ -68,9 +59,9 @@ Use `letsdane -help` to see command line options.
 
 ## Let's DANE with handshake.org
 
-You can use hsd or hnsd. Specify the resolver address:port of the recursive handshake resolver
+You can use hsd or hnsd. Specify address:port of the recursive handshake resolver
 you must have it local on your machine to use letsdane securely. 
-Add `-skip-dnssec` because it does not use a root ksk (handshake validates dnssec for you)
+Add `-skip-dnssec` because it does not use a root ksk (handshake validates dnssec)
 
     ./letsdane -r 127.0.0.1:8585 -o myca.cert -skip-dnssec
 
@@ -79,7 +70,6 @@ Some handshake sites
 
 * https://3b
 * https://proofofconcept
-
 
 
 ## Use of resolvers
