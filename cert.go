@@ -150,6 +150,11 @@ func (c *mitmConfig) tlsForHost(hostname string, ctx *goproxy.ProxyCtx) *tls.Con
 	return &tls.Config{
 		InsecureSkipVerify: false,
 		GetCertificate: func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
+			if r, ok := ctx.UserData.(*TLSAResult) ; ok {
+				if r.Fail != nil {
+					return nil, r.Fail
+				}
+			}
 			if hostname != clientHello.ServerName {
 				return nil, fmt.Errorf("hostname %s does not match server name %s", hostname, clientHello.ServerName)
 			}
