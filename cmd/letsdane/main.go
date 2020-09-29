@@ -19,6 +19,8 @@ import (
 	"time"
 )
 
+const KSK2017 = `. IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D`
+
 var (
 	raddr     = flag.String("r", "", "dns resolvers to use (default: /etc/resolv.conf)")
 	output    = flag.String("o", "", "path to export the public CA file")
@@ -202,6 +204,11 @@ func setupUnbound(u *rs.Unbound) error {
 	if *anchor != "" {
 		if err := u.AddTAFile(*anchor); err != nil {
 			log.Fatalf("unbound: %v", err)
+		}
+	} else {
+		// add hardcoded ksk if no anchor is specified
+		if err := u.AddTA(KSK2017) ; err != nil {
+			log.Fatal(err)
 		}
 	}
 

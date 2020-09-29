@@ -22,6 +22,10 @@ func (u *Unbound) ResolvConf(name string) error {
 	return ErrUnboundNotAvail
 }
 
+func (u *Unbound) AddTA(ta string) error {
+	return ErrUnboundNotAvail
+}
+
 func (u *Unbound) AddTAFile(file string) error {
 	return ErrUnboundNotAvail
 }

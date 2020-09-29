@@ -9,7 +9,6 @@ import (
 	"net"
 )
 
-const KSK2017 = `. IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D`
 
 type Unbound struct {
 	ub          *unbound.Unbound
@@ -26,10 +25,6 @@ func NewUnbound() (u *Unbound, err error) {
 		}
 	}()
 
-	if err = u.ub.AddTa(KSK2017); err != nil {
-		return
-	}
-
 	u.resolvAsync = func(name string, rrtype, rrclass uint16, c chan *unbound.ResultError) {
 		u.ub.ResolveAsync(name, rrtype, rrclass, c)
 	}
@@ -39,6 +34,10 @@ func NewUnbound() (u *Unbound, err error) {
 	}
 
 	return u, nil
+}
+
+func (u *Unbound) AddTA(ta string) error {
+	return u.ub.AddTa(ta)
 }
 
 func (u *Unbound) AddTAFile(file string) error {
