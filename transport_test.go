@@ -116,7 +116,7 @@ func TestRoundTripperTLS(t *testing.T) {
 	_, _, tlsa2 := testCreateCertTLSAPair(3, 1, 1)
 	rs.tlsaRRs = []*dns.TLSA{&tlsa2}
 
-	authRes := &authResult{
+	authRes := &TLSAResult{
 		TLSA: tlsaRRs,
 		Host: host,
 		Port: port,
@@ -210,7 +210,7 @@ func TestRoundTripperNoTLS(t *testing.T) {
 
 // creates a test certificate and a TLSA record for it.
 func testCreateCertTLSAPair(usage, selector, matching uint8) (tls.Certificate, *rsa.PrivateKey, dns.TLSA) {
-	ca, priv, err := NewAuthority("DNSSEC", "DNSSEC", time.Hour)
+	ca, priv, err := NewAuthority("DNSSEC", "DNSSEC", time.Hour, false)
 	if err != nil {
 		log.Fatal(err)
 	}
