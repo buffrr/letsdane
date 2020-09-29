@@ -40,7 +40,7 @@ func RoundTripper(rs resolver.Resolver, gContext *goproxy.ProxyCtx) http.RoundTr
 			if gContext == nil {
 				return nil, fmt.Errorf("transport: no validation data in ctx")
 			}
-			if cdata, ok := gContext.UserData.(*authResult); ok {
+			if cdata, ok := gContext.UserData.(*TLSAResult); ok {
 				if cdata.Fail != nil {
 					return nil, fmt.Errorf("transport: %v", cdata.Fail)
 				}
@@ -128,7 +128,7 @@ func dialContext(ctx context.Context, network, addr string, rs resolver.Resolver
 	return nil, fmt.Errorf("transport: could not reach %s", addr)
 }
 
-func dialTLS(network, addr string, config *tls.Config, cdata *authResult, ctx *goproxy.ProxyCtx) (*tls.Conn, error) {
+func dialTLS(network, addr string, config *tls.Config, cdata *TLSAResult, ctx *goproxy.ProxyCtx) (*tls.Conn, error) {
 	config.ServerName = cdata.Host
 	// TODO: use async dialing
 	for _, ip := range cdata.IPs {

@@ -40,7 +40,7 @@ func TestProxyTLSAFilter(t *testing.T) {
 		log.Fatal("want failed queries to be interrupted")
 	}
 
-	auth, ok := ctx.UserData.(*authResult)
+	auth, ok := ctx.UserData.(*TLSAResult)
 	if !ok {
 		log.Fatal("want auth result")
 	}
@@ -59,7 +59,7 @@ func TestProxyTLSAFilter(t *testing.T) {
 		log.Fatal("want secure queries to be sent for validation")
 	}
 
-	if ctx.UserData.(*authResult).Fail != nil {
+	if ctx.UserData.(*TLSAResult).Fail != nil {
 		t.Fatal("want no error")
 	}
 

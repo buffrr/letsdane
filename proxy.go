@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-type authResult struct {
+type TLSAResult struct {
 	Fail error
 	Host string
 	Port string
@@ -62,7 +62,7 @@ func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
 			}
 		}
 
-		res := &authResult{
+		res := &TLSAResult{
 			Fail: blockError,
 			IPs:  ips,
 			TLSA: ans,
@@ -110,7 +110,7 @@ func (c *Config) Handler() (http.Handler, error) {
 
 	p.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		ctx.RoundTripper = goproxy.RoundTripperFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (resp *http.Response, err error) {
-			// the custom round tripper expects an authResult in the ctx for DialTLSContext
+			// the custom round tripper expects an TLSAResult in the ctx for DialTLSContext
 			// it also uses the resolver for DialContext requests
 			ctx.Logf("proxy: attempt round trip for %s", req.Host)
 			tr := RoundTripper(c.Resolver, ctx)
