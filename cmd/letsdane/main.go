@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"flag"
 	"fmt"
 	"github.com/buffrr/letsdane"
@@ -200,15 +201,29 @@ func exportCA() {
 	}
 }
 
-func setupUnbound(u *rs.Unbound) error {
+func setupUnbound() (u *rs.Unbound, err error) {
+	u, err = rs.NewUnbound()
+	if err == rs.ErrUnboundNotAvail {
+		return nil, errors.New("letsdane has not been compiled with unbound. " +
+			"if you have a local dnssec capable resolver, run with -skip-dnssec")
+	}
+	if err != nil {
+		return
+	}
+	defer func() {
+		if err != nil {
+			u.Destroy()
+		}
+	}()
+
 	if *anchor != "" {
 		if err := u.AddTAFile(*anchor); err != nil {
-			log.Fatalf("unbound: %v", err)
+			return nil, err
 		}
 	} else {
 		// add hardcoded ksk if no anchor is specified
 		if err := u.AddTA(KSK2017) ; err != nil {
-			log.Fatal(err)
+			return nil, err
 		}
 	}
 
@@ -227,17 +242,16 @@ func setupUnbound(u *rs.Unbound) error {
 			}
 
 			if err := u.SetFwd(ip + "@" + port); err != nil {
-				return err
+				return nil, err
 			}
 		}
 
-		return nil
+		return
 	}
 
 	// falls back to root hints if no /etc/resolv.conf
 	_ = u.ResolvConf("/etc/resolv.conf")
-
-	return nil
+	return
 }
 
 func main() {
@@ -257,19 +271,12 @@ func main() {
 		resolver = ad
 
 	} else {
-		u, err := rs.NewUnbound()
-		if err == rs.ErrUnboundNotAvail {
-			log.Fatal("Let's DANE has not been compiled with unbound. if you have a local dnssec capable resolver, run with -skip-dnssec")
-		}
+		u, err := setupUnbound()
 		if err != nil {
 			log.Fatalf("unbound: %v", err)
 		}
-
-		if err := setupUnbound(u); err != nil {
-			log.Fatalf("unbound: %v", err)
-		}
-
 		defer u.Destroy()
+
 		resolver = u
 	}
 

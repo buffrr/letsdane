@@ -18,12 +18,6 @@ type Unbound struct {
 
 func NewUnbound() (u *Unbound, err error) {
 	u = &Unbound{ub: unbound.New()}
-	defer func() {
-		if err != nil {
-			err = fmt.Errorf("unbound: %v", err)
-			u.Destroy()
-		}
-	}()
 
 	u.resolvAsync = func(name string, rrtype, rrclass uint16, c chan *unbound.ResultError) {
 		u.ub.ResolveAsync(name, rrtype, rrclass, c)
