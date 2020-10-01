@@ -58,7 +58,7 @@ var testData = map[uint16]map[string]*dns.Msg{
 				AuthenticatedData: true,
 			},
 			Answer:  []dns.RR{
-				testRR("example.com.            86400   IN      A       93.184.216.34"),
+				testRR("ad.example.com.            86400   IN      A       93.184.216.34"),
 			},
 		},
 		"dnssec-failed.org.": &dns.Msg{
@@ -99,7 +99,7 @@ var testData = map[uint16]map[string]*dns.Msg{
 				AuthenticatedData: false,
 			},
 			Answer:  []dns.RR{
-				testRR("example.com.            86400   IN      AAAA    2606:2800:220:1:248:1893:25c8:1946"),
+				testRR("ad.example.com.            86400   IN      AAAA    2606:2800:220:1:248:1893:25c8:1946"),
 			},
 		},
 		"dnssec-failed.org.": &dns.Msg{

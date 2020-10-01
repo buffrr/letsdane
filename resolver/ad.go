@@ -12,10 +12,11 @@ import (
 
 // ClientResolver implements Resolver and caches queries.
 type AD struct {
-	rrCache  map[uint16]*cache
-	client   *dns.Client
-	address  string
-	exchangeFunc  func (m *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error)
+	rrCache      map[uint16]*cache
+	client       *dns.Client
+	address      string
+	exchangeFunc func(m *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error)
+	Verify       func(m *dns.Msg) error
 }
 
 const (
@@ -51,9 +52,9 @@ func NewAD(server string) (*AD, error) {
 	rrCache[dns.TypeTLSA] = newCache(maxCache)
 
 	return &AD{
-		rrCache:  rrCache,
-		client:   client,
-		address:  addr,
+		rrCache:      rrCache,
+		client:       client,
+		address:      addr,
 		exchangeFunc: exchange,
 	}, nil
 }
@@ -209,6 +210,12 @@ func (rs *AD) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 	r, _, err := rs.exchangeFunc(m, rs.address, rs.client)
 	if err != nil {
 		return nil, false, err
+	}
+
+	if rs.Verify != nil {
+		if err := rs.Verify(r) ; err != nil {
+			return nil, false, fmt.Errorf("ad: verify error: %v", err)
+		}
 	}
 
 	if r.Truncated {

@@ -1,6 +1,7 @@
 package resolver
 
 import (
+	"errors"
 	"github.com/miekg/dns"
 	"net"
 	"testing"
@@ -9,7 +10,7 @@ import (
 
 func TestAD_LookupTLSA(t *testing.T) {
 	rs, _ := NewAD("0.0.0.0")
-	rs.exchangeFunc =  func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
+	rs.exchangeFunc = func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
 		qm := testData[req.Question[0].Qtype]
 		reply := qm[req.Question[0].Name]
 
@@ -34,14 +35,13 @@ func TestAD_LookupTLSA(t *testing.T) {
 		t.Fatalf("have %d, want no results", len(ans))
 	}
 
-	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org", false) ; err == nil {
+	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org", false); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org", true) ; err == nil {
+	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org", true); err == nil {
 		t.Fatal("want error servfail")
 	}
-
 
 	ans, _ = rs.LookupTLSA("443", "tcp", "localhost", true)
 	if len(ans) != 0 {
@@ -56,18 +56,18 @@ func TestAD_LookupTLSA(t *testing.T) {
 
 func TestAD_LookupIP(t *testing.T) {
 	rs, _ := NewAD("0.0.0.0")
-	rs.exchangeFunc =  func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
+	rs.exchangeFunc = func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
 		qm := testData[req.Question[0].Qtype]
 		reply := qm[req.Question[0].Name]
 
 		return reply, 0, nil
 	}
 
-	if _, err := rs.LookupIP("dnssec-failed.org", false) ; err == nil {
+	if _, err := rs.LookupIP("dnssec-failed.org", false); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	if _, err := rs.LookupIP("dnssec-failed.org", true) ; err == nil {
+	if _, err := rs.LookupIP("dnssec-failed.org", true); err == nil {
 		t.Fatal("want error servfail")
 	}
 
@@ -94,7 +94,7 @@ func TestAD_LookupIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(ips) == 1  && ips[0].Equal(net.ParseIP("1.1.1.1")) {
+	if len(ips) == 1 && ips[0].Equal(net.ParseIP("1.1.1.1")) {
 		t.Fatal("resolver shouldn't attempt to resolve localhost")
 	}
 
@@ -103,11 +103,38 @@ func TestAD_LookupIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(ips) != 1 || !ips[0].Equal(net.ParseIP("1.1.1.1")){
+	if len(ips) != 1 || !ips[0].Equal(net.ParseIP("1.1.1.1")) {
 		t.Fatal("resolver shouldn't attempt to resolve ip addresses")
 	}
 }
 
+func TestAD_Verify(t *testing.T) {
+	rs, _ := NewAD("0.0.0.0")
+	rs.exchangeFunc = func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
+		qm := testData[req.Question[0].Qtype]
+		reply := qm[req.Question[0].Name]
+
+		return reply, 0, nil
+	}
+	rs.Verify = func(m *dns.Msg) error {
+		if m.Answer[0].Header().Name == "ad.example.com." {
+			return errors.New("sig failed")
+		}
+		return nil
+	}
+
+	if _, err := rs.LookupIP("ad.example.com", true); err == nil {
+		t.Fatal("want query to fail")
+	}
+	if _, err := rs.LookupIP("example.com", true); err != nil {
+		t.Fatal(err)
+	}
+
+	rs.Verify = nil
+	if _, err := rs.LookupIP("ad.example.com", true); err != nil {
+		t.Fatal("want no error")
+	}
+}
 
 func testRR(rr string) dns.RR {
 	r, err := dns.NewRR(rr)
@@ -117,4 +144,3 @@ func testRR(rr string) dns.RR {
 
 	return r
 }
-
