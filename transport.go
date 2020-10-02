@@ -38,12 +38,17 @@ func RoundTripper(rs resolver.Resolver, gContext *goproxy.ProxyCtx) http.RoundTr
 		},
 		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			if gContext == nil {
-				return nil, fmt.Errorf("transport: no validation data in ctx")
+				return nil, fmt.Errorf("transport: no ctx available")
 			}
 			if cdata, ok := gContext.UserData.(*TLSAResult); ok {
 				if cdata.Fail != nil {
 					return nil, fmt.Errorf("transport: %v", cdata.Fail)
 				}
+				// check if a connection already exists
+				if cdata.Conn != nil {
+					return cdata.Conn, nil
+				}
+
 				tlsConfig := newTLSVerifyConfig(cdata.TLSA)
 				return dialTLS(network, address, tlsConfig, cdata, gContext)
 			}

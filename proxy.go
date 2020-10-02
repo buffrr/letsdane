@@ -18,6 +18,7 @@ type TLSAResult struct {
 	Port string
 	IPs  []net.IP
 	TLSA []*dns.TLSA
+	Conn net.Conn
 }
 
 type Config struct {
@@ -75,6 +76,32 @@ func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
 	}
 }
 
+var handleConnect = func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
+	tlsa, ok := ctx.UserData.(*TLSAResult)
+	if !ok {
+		return goproxy.RejectConnect, host
+	}
+	if tlsa.Fail != nil {
+		ctx.Logf("proxy: fail reject connect: %v", tlsa.Fail)
+		return goproxy.RejectConnect, host
+	}
+
+	// dial remote server before starting local handshake with client
+	// if DANE handshake fails, reject the connect request early
+	// a successful tls connection will be added to ctx to get consumed
+	// by transport.
+	daneConfig := newTLSVerifyConfig(tlsa.TLSA)
+	tlsa.Conn, tlsa.Fail = dialTLS("tcp", tlsa.Host, daneConfig, tlsa, ctx)
+	if tlsa.Fail != nil {
+		ctx.Logf("proxy: dial tls failed: %v", tlsa.Fail)
+		return goproxy.RejectConnect, host
+	}
+
+	ctx.Logf("proxy: mitming connect")
+	return goproxy.MitmConnect, host
+
+}
+
 func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) error {
 	if c.Certificate != nil && c.PrivateKey != nil {
 		mc, err := newMITMConfig(c.Certificate, c.PrivateKey, c.Validity, "DNSSEC")
@@ -87,12 +114,12 @@ func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) error {
 			return mc.tlsForHost(host, ctx), nil
 		}
 
-		goproxy.OkConnect = &goproxy.ConnectAction{Action: goproxy.ConnectAccept, TLSConfig: tlsConfig}
+		goproxy.OkConnect = &goproxy.ConnectAction{Action: goproxy.ConnectAccept, TLSConfig: nil}
 		goproxy.MitmConnect = &goproxy.ConnectAction{Action: goproxy.ConnectMitm, TLSConfig: tlsConfig}
-		goproxy.HTTPMitmConnect = &goproxy.ConnectAction{Action: goproxy.ConnectHTTPMitm, TLSConfig: tlsConfig}
-		goproxy.RejectConnect = &goproxy.ConnectAction{Action: goproxy.ConnectReject, TLSConfig: tlsConfig}
+		goproxy.HTTPMitmConnect = &goproxy.ConnectAction{Action: goproxy.ConnectHTTPMitm, TLSConfig: nil}
+		goproxy.RejectConnect = &goproxy.ConnectAction{Action: goproxy.ConnectReject, TLSConfig: nil}
 
-		p.OnRequest(tlsaFilterFunc(c)).HandleConnect(goproxy.AlwaysMitm)
+		p.OnRequest(tlsaFilterFunc(c)).HandleConnectFunc(handleConnect)
 	}
 
 	return nil
