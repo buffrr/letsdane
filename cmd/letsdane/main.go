@@ -8,8 +8,10 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/buffrr/hsig0"
 	"github.com/buffrr/letsdane"
 	rs "github.com/buffrr/letsdane/resolver"
+	"github.com/miekg/dns"
 	"golang.org/x/crypto/ssh/terminal"
 	"io/ioutil"
 	"log"
@@ -222,7 +224,7 @@ func setupUnbound() (u *rs.Unbound, err error) {
 		}
 	} else {
 		// add hardcoded ksk if no anchor is specified
-		if err := u.AddTA(KSK2017) ; err != nil {
+		if err := u.AddTA(KSK2017); err != nil {
 			return nil, err
 		}
 	}
@@ -254,12 +256,39 @@ func setupUnbound() (u *rs.Unbound, err error) {
 	return
 }
 
+var errNoKey = errors.New("no key found")
+// parses hsd format: key@host:port
+func splitHostPortKey(addr string) (hostport string, key *hsig0.PublicKey, err error) {
+	s := strings.Split(strings.TrimSpace(addr), "@")
+	if len(s) != 2 {
+		return "", nil, errNoKey
+	}
+
+	hostport = s[1]
+	key, err = hsig0.ParsePublicKey(s[0])
+	return
+}
+
 func main() {
 	flag.Parse()
 	var resolver rs.Resolver
+	var sig0 bool
+
+	hostport, key, err := splitHostPortKey(*raddr)
+	switch err {
+	case errNoKey:
+		sig0 = false
+	case nil:
+		sig0 = true
+		*ad = true
+		*raddr = hostport
+	default:
+		log.Fatal(err)
+	}
+
 
 	if *ad {
-		if !isLoopback(*raddr) {
+		if !sig0 && !isLoopback(*raddr) {
 			log.Printf("WARNING: you must have a local dnssec capable resolver to use letsdane securely")
 			log.Printf("WARNING: '%s' is not a loopback address (insecure)!", *raddr)
 		}
@@ -267,6 +296,11 @@ func main() {
 		ad, err := rs.NewAD(*raddr)
 		if err != nil {
 			log.Fatal(err)
+		}
+		if sig0 {
+			ad.Verify = func(m *dns.Msg) error {
+				return hsig0.Verify(m, key)
+			}
 		}
 		resolver = ad
 

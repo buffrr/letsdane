@@ -33,7 +33,7 @@ torproject.org with DANE-EE validated certificate
 
 Let's DANE acts as a trusted intermediary between the browser and DANE enabled sites. It will check if a domain supports it, and generate a certificate on the fly if the authentication was successful. The connection will remain encrypted between you and the end server. If a website doesn't support DANE, its original certificate will be served instead.
 
-For this to work, Let's DANE generates a local certificate authority that must be installed in your browser's certificate store. This CA is used to issue certificates for successful DANE authentications.
+For this to work, Let's DANE creates a local certificate authority that must be installed in your browser's certificate store. This CA is used to issue certificates for successful DANE authentications.
 
 
 ## Build from source
@@ -46,8 +46,8 @@ make sure you have libunbound installed and run
     go build -tags unbound
 
 Note: you can build without unbound, by removing `-tags unbound` and run let's dane with `-skip-dnssec`
-this is generally not recommended (you must have a local trusted dnssec resolver). By "local" I mean on your machine!
-let's dane will only check the authenticated data flag set by your resolver if `-skip-dnssec` is specified
+this is generally not recommended (you must have a local trusted dnssec resolver or use sig0 if it's a remote hsd node).
+let's dane will check the authenticated data flag set by your resolver if `-skip-dnssec` or sig0 is used.
 
 ## Quick Usage
 
@@ -66,26 +66,29 @@ All queries are DNSSEC validated with a hardcoded ICANN 2017 KSK (you can set tr
 
 Use `letsdane -help` to see command line options. 
 
- Some sites that currently use DANE-EE:
- 
-* FreeBSD: https://freebsd.org
-
-* Tor Project: https://torproject.org
-
-
 ## Let's DANE with Handshake
 
-You can use [hsd](https://github.com/handshake-org/hsd) or [hnsd](https://github.com/handshake-org/hnsd). Specify address:port of the recursive handshake resolver. You must have it local on your machine to use letsdane securely. 
-Add `-skip-dnssec` because it does not use a root ksk (handshake resolver validates dnssec).
+You can use [hsd](https://github.com/handshake-org/hsd) or [hnsd](https://github.com/handshake-org/hnsd). Specify address:port of the handshake resolver. You must have it local on your machine or use sig0. 
 
 Add `-skip-icann` option to prevent the generated CA from issuing certificates for ICANN tlds (recommended)
 
     ./letsdane -r 127.0.0.1:8585 -o myca.cert -skip-dnssec -skip-icann
 
-Some handshake sites
+Use hsd with sig0 specify node `public_key@ip:port`
 
-* https://3b
+    ./letsdane -r aj7bjss4ae6hd3kdxzl4f6klirzla377uifxu5mnzczzk2v7p76ek@192.168.1.22:8585 -o myca.cert -skip-icann
+
+
+#### DANE-EE Sites
+ 
+* FreeBSD: https://freebsd.org
+* Tor Project: https://torproject.org
+
+handshake
+
+* https://letsdane
 * https://proofofconcept
+* https://humbly
 
 
 ## Use of resolvers
