@@ -1,5 +1,5 @@
 
-# 🔒 Let's DANE
+# Let's DANE
 
 **Note: Let's DANE is still under development, use at your own risk.**
 
