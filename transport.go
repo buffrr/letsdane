@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"errors"
 	"fmt"
 	"github.com/buffrr/letsdane/resolver"
 	"github.com/elazarl/goproxy"
@@ -27,94 +26,129 @@ var dialer = net.Dialer{
 	KeepAlive: KeepAlive,
 }
 
-var daneErr = errors.New("transport: DANE verification failed")
+type tlsError struct {
+	err string
+}
 
-// RoundTripper returns a round tripper capable of performing DANE/TLSA
+func (t *tlsError) Error() string {
+	return t.err
+}
+
+// roundTripper creates a round tripper capable of performing DANE/TLSA
 // verification. Uses the given resolver for dns lookups.
-func RoundTripper(rs resolver.Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
+func roundTripper(rs resolver.Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
-			return dialContext(ctx, network, addr, rs)
+			return dialContextResolver(ctx, network, addr, rs)
 		},
 		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
 			if gContext == nil {
 				return nil, fmt.Errorf("transport: no ctx available")
 			}
-			if cdata, ok := gContext.UserData.(*TLSAResult); ok {
-				if cdata.Fail != nil {
-					return nil, fmt.Errorf("transport: %v", cdata.Fail)
+			if res, ok := gContext.UserData.(*tlsDialConfig); ok {
+				if res.Fail != nil {
+					return nil, fmt.Errorf("transport: %v", res.Fail)
 				}
 				// check if a connection already exists
-				if cdata.Conn != nil {
-					return cdata.Conn, nil
+				if res.Conn != nil {
+					return res.Conn, nil
+				}
+				if network != res.Network {
+					return nil, fmt.Errorf("transport: specified network %s does not match %s", network, res.Network)
 				}
 
-				tlsConfig := newTLSVerifyConfig(cdata.TLSA)
-				return dialTLS(network, address, tlsConfig, cdata, gContext)
+				return dialTLSContext(ctx, res)
 			}
 			return nil, fmt.Errorf("transport: address %s not reachable", address)
 		},
 		TLSHandshakeTimeout:   TLSHandshakeTimeout,
 		ExpectContinueTimeout: ExpectContinueTimeout,
 	}
-
 }
 
-// TLSASupported checks if there is a supported DANE usage
-// from the given TLSA records. currently checks for usage EE(3).
-func TLSASupported(rrs []*dns.TLSA) bool {
-	for _, rr := range rrs {
-		if rr.Usage == 3 {
-			return true
-		}
-	}
-	return false
-}
-
-func newTLSVerifyConfig(rrs []*dns.TLSA) *tls.Config {
+// newDANEConfig creates a new tls configuration capable of validating DANE.
+func newDANEConfig(host string, rrs []*dns.TLSA) *tls.Config {
 	return &tls.Config{
-		InsecureSkipVerify:    true,
-		VerifyPeerCertificate: getTLSAValidator(rrs),
+		InsecureSkipVerify: true,
+		VerifyConnection:   verifyConnection(rrs),
+		ServerName:         host,
 	}
 }
 
-func getTLSAValidator(rrs []*dns.TLSA) func([][]byte, [][]*x509.Certificate) error {
-	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		certs := make([]*x509.Certificate, len(rawCerts))
-		for i, asn1Data := range rawCerts {
-			cert, err := x509.ParseCertificate(asn1Data)
-			if err != nil {
-				return errors.New("transport: failed to parse certificate from server: " + err.Error())
-			}
-			certs[i] = cert
+// verifyConnection returns a function that verifies the given tls connection state using the tlsa rrs
+func verifyConnection(rrs []*dns.TLSA) func(cs tls.ConnectionState) error {
+	return func(cs tls.ConnectionState) error {
+		// DANE-EE verification
+		// https://tools.ietf.org/html/rfc7671
+		// https://tools.ietf.org/html/rfc6698
+		// 1) validate the supplied chain is correct
+		// there is nothing to trust here yet
+		// what's important is the leaf certificate
+		opts := x509.VerifyOptions{
+			Roots:         x509.NewCertPool(),
+			Intermediates: x509.NewCertPool(),
+			// ignore leaf certificate name checking for DANE-EE
+			DNSName: "",
+			// the expiration date of the server certificate MUST be ignored as well.
+			// https://tools.ietf.org/html/rfc7671#section-5.1
+			CurrentTime: cs.PeerCertificates[0].NotBefore,
+		}
+		opts.Roots.AddCert(cs.PeerCertificates[len(cs.PeerCertificates)-1])
+		for _, cert := range cs.PeerCertificates[1:] {
+			opts.Intermediates.AddCert(cert)
+		}
+		if _, err := cs.PeerCertificates[0].Verify(opts); err != nil {
+			return &tlsError{err: fmt.Sprintf("transport: verify chain failed: %s", err)}
 		}
 
-		// TLSA verification.
-		// Currently, supports DANE-EE(3). We only need to check the leaf certificate.
-		// https://tools.ietf.org/html/rfc7671#section-5.1
-		// https://tools.ietf.org/html/rfc6698
+		// 2) Verify the leaf certificate against the TLSA rrs
 		for _, t := range rrs {
 			if t.Usage != 3 {
 				continue
 			}
-
-			if err := t.Verify(certs[0]); err == nil {
+			if err := t.Verify(cs.PeerCertificates[0]); err == nil {
 				return nil
 			}
 		}
-
-		return daneErr
+		return &tlsError{err: "transport: dane verification failed"}
 	}
 }
 
-// GetDialFunc returns a dial function that uses the given resolver.
-func GetDialFunc(rs resolver.Resolver) func(network string, addr string) (net.Conn, error) {
+// dialTLSContext connects to the network using the dst configuration and initiates a TLS handshake.
+func dialTLSContext(ctx context.Context, dst *tlsDialConfig) (*tls.Conn, error) {
+	if dst.Conn != nil {
+		return nil, fmt.Errorf("transport: dial tls context: connection already exists")
+	}
+	tlsDialer := &tls.Dialer{
+		NetDialer: &dialer,
+		Config:    dst.Config,
+	}
+
+	// TODO: use async dialing
+	for _, ip := range dst.IPs {
+		ipaddr := net.JoinHostPort(ip.String(), dst.Port)
+		conn, err := tlsDialer.DialContext(ctx, dst.Network, ipaddr)
+		if err != nil {
+			if err, ok := err.(*tlsError); ok {
+				return nil, err
+			}
+			continue
+		}
+		return conn.(*tls.Conn), nil
+	}
+
+	return nil, fmt.Errorf("transport: could not reach %s", dst.Host)
+}
+
+// dialFunc returns a dial function that uses the given resolver.
+func dialFunc(rs resolver.Resolver) func(network string, addr string) (net.Conn, error) {
 	return func(network string, addr string) (net.Conn, error) {
-		return dialContext(context.Background(), network, addr, rs)
+		return dialContextResolver(context.Background(), network, addr, rs)
 	}
 }
 
-func dialContext(ctx context.Context, network, addr string, rs resolver.Resolver) (net.Conn, error) {
+// dialContextResolver connects to the address on the named network using the provided context and resolver.
+func dialContextResolver(ctx context.Context, network, addr string, rs resolver.Resolver) (net.Conn, error) {
 	_, port, ips, err := resolveAddr(addr, rs)
 	if err != nil {
 		return nil, err
@@ -133,42 +167,30 @@ func dialContext(ctx context.Context, network, addr string, rs resolver.Resolver
 	return nil, fmt.Errorf("transport: could not reach %s", addr)
 }
 
-func dialTLS(network, addr string, config *tls.Config, cdata *TLSAResult, ctx *goproxy.ProxyCtx) (*tls.Conn, error) {
-	config.ServerName = cdata.Host
-	// TODO: use async dialing
-	for _, ip := range cdata.IPs {
-		ipaddr := net.JoinHostPort(ip.String(), cdata.Port)
-		conn, err := tls.Dial(network, ipaddr, config)
-		if err != nil {
-			if err == daneErr {
-				return nil, err
-			}
-
-			ctx.Logf("transport: dialing %s for host %s failed: %v", ipaddr, addr, err)
-			continue
-		}
-		return conn, nil
-	}
-
-	return nil, fmt.Errorf("transport: could not reach %s", addr)
-}
-
 func resolveAddr(addr string, rs resolver.Resolver) (host, port string, ips []net.IP, err error) {
 	host, port, err = net.SplitHostPort(addr)
 	if err != nil {
 		return
 	}
-
 	ips, err = rs.LookupIP(host, false)
-
 	if err != nil {
 		return
 	}
-
 	if len(ips) == 0 {
 		err = fmt.Errorf("transport: lookup %s no such host", addr)
 		return
 	}
 
 	return
+}
+
+// tlsaSupported checks if there is a supported DANE usage
+// from the given TLSA records. currently checks for usage EE(3).
+func tlsaSupported(rrs []*dns.TLSA) bool {
+	for _, rr := range rrs {
+		if rr.Usage == 3 {
+			return true
+		}
+	}
+	return false
 }

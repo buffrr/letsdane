@@ -40,7 +40,7 @@ For this to work, Let's DANE creates a local certificate authority that must be 
 
 You can build the latest version from source for now. binaries in releases are not up to date yet.
 
-make sure you have libunbound installed and run
+Go 1.15+ is required. make sure you have libunbound installed and run
 
     git clone https://github.com/buffrr/letsdane.git && cd letsdane/cmd/letsdane
     go build -tags unbound

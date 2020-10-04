@@ -103,7 +103,7 @@ func TestRoundTripperTLS(t *testing.T) {
 	}
 
 	client := ts.Client()
-	client.Transport = RoundTripper(rs, nil)
+	client.Transport = roundTripper(rs, nil)
 
 	// nil context
 	_, err := client.Get(requrl)
@@ -116,14 +116,16 @@ func TestRoundTripperTLS(t *testing.T) {
 	_, _, tlsa2 := testCreateCertTLSAPair(3, 1, 1)
 	rs.tlsaRRs = []*dns.TLSA{&tlsa2}
 
-	authRes := &TLSAResult{
-		TLSA: tlsaRRs,
-		Host: host,
-		Port: port,
-		IPs:  []net.IP{rs.ip},
+	authRes := &tlsDialConfig{
+		TLSA:    tlsaRRs,
+		Host:    host,
+		Port:    port,
+		IPs:     []net.IP{rs.ip},
+		Network: "tcp",
+		Config:  newDANEConfig(host, tlsaRRs),
 	}
 
-	client.Transport = RoundTripper(rs, &goproxy.ProxyCtx{
+	client.Transport = roundTripper(rs, &goproxy.ProxyCtx{
 		UserData: authRes,
 	})
 	_, err = client.Get(requrl)
@@ -135,7 +137,9 @@ func TestRoundTripperTLS(t *testing.T) {
 	rs.tlsaRRs = []*dns.TLSA{&goodTLSA}
 
 	authRes.TLSA = rs.tlsaRRs
-	client.Transport = RoundTripper(rs, &goproxy.ProxyCtx{
+	authRes.Config = newDANEConfig(host, rs.tlsaRRs)
+
+	client.Transport = roundTripper(rs, &goproxy.ProxyCtx{
 		UserData: authRes,
 	})
 
@@ -161,7 +165,7 @@ func TestRoundTripperTLS(t *testing.T) {
 	_, _, tlsa3 := testCreateCertTLSAPair(1, 0, 1)
 	rs.tlsaRRs = []*dns.TLSA{&tlsa3}
 	authRes.TLSA = rs.tlsaRRs
-	client.Transport = RoundTripper(rs, nil)
+	client.Transport = roundTripper(rs, nil)
 	_, err = client.Get(requrl)
 
 	if err == nil {
@@ -187,7 +191,7 @@ func TestRoundTripperNoTLS(t *testing.T) {
 	}
 
 	client := ts.Client()
-	client.Transport = RoundTripper(rs, nil)
+	client.Transport = roundTripper(rs, nil)
 
 	res, err := client.Get(requrl)
 	if err != nil {

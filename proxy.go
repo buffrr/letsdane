@@ -1,6 +1,7 @@
 package letsdane
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
@@ -12,21 +13,23 @@ import (
 	"time"
 )
 
-type TLSAResult struct {
-	Fail error
-	Host string
-	Port string
-	IPs  []net.IP
-	TLSA []*dns.TLSA
-	Conn net.Conn
-}
-
 type Config struct {
 	Certificate *x509.Certificate
 	PrivateKey  interface{}
 	Validity    time.Duration
 	Resolver    resolver.Resolver
 	Verbose     bool
+}
+
+type tlsDialConfig struct {
+	Fail error
+	Host string
+	Port string
+	Network string
+	IPs  []net.IP
+	TLSA []*dns.TLSA
+	Config *tls.Config
+	Conn net.Conn
 }
 
 func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
@@ -57,18 +60,19 @@ func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
 				return false
 			}
 
-			if !TLSASupported(ans) {
+			if !tlsaSupported(ans) {
 				ctx.Logf("proxy: host %s has no supported tlsa records skipping mitm", host)
 				return false
 			}
 		}
 
-		res := &TLSAResult{
+		res := &tlsDialConfig{
 			Fail: blockError,
 			IPs:  ips,
 			TLSA: ans,
 			Host: host,
 			Port: port,
+			Network: "tcp",
 		}
 		ctx.UserData = res
 
@@ -77,12 +81,12 @@ func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
 }
 
 var handleConnect = func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAction, string) {
-	tlsa, ok := ctx.UserData.(*TLSAResult)
+	dialConfig, ok := ctx.UserData.(*tlsDialConfig)
 	if !ok {
 		return goproxy.RejectConnect, host
 	}
-	if tlsa.Fail != nil {
-		ctx.Logf("proxy: fail reject connect: %v", tlsa.Fail)
+	if dialConfig.Fail != nil {
+		ctx.Logf("proxy: fail reject connect: %v", dialConfig.Fail)
 		return goproxy.RejectConnect, host
 	}
 
@@ -90,13 +94,14 @@ var handleConnect = func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAc
 	// if DANE handshake fails, reject the connect request early
 	// a successful tls connection will be added to ctx to get consumed
 	// by transport.
-	daneConfig := newTLSVerifyConfig(tlsa.TLSA)
-	tlsa.Conn, tlsa.Fail = dialTLS("tcp", tlsa.Host, daneConfig, tlsa, ctx)
-	if tlsa.Fail != nil {
-		ctx.Logf("proxy: dial tls failed: %v", tlsa.Fail)
+	dialConfig.Config = newDANEConfig(dialConfig.Host, dialConfig.TLSA)
+	conn, err := dialTLSContext(context.Background(), dialConfig)
+	if err != nil {
+		ctx.Logf("proxy: dial tls failed: %v", dialConfig.Fail)
 		return goproxy.RejectConnect, host
 	}
 
+	dialConfig.Conn = conn
 	ctx.Logf("proxy: mitming connect")
 	return goproxy.MitmConnect, host
 
@@ -129,7 +134,7 @@ func (c *Config) Handler() (http.Handler, error) {
 	p := goproxy.NewProxyHttpServer()
 	// ConnectDial is only used for non mitm ed CONNECT requests
 	// the configured resolver should still be used for all requests
-	p.ConnectDial = GetDialFunc(c.Resolver)
+	p.ConnectDial = dialFunc(c.Resolver)
 	p.Verbose = c.Verbose
 	if err := c.setupMITM(p); err != nil {
 		return nil, err
@@ -137,10 +142,10 @@ func (c *Config) Handler() (http.Handler, error) {
 
 	p.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
 		ctx.RoundTripper = goproxy.RoundTripperFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (resp *http.Response, err error) {
-			// the custom round tripper expects an TLSAResult in the ctx for DialTLSContext
+			// the custom round tripper expects an tlsDialConfig in the ctx for DialTLSContext
 			// it also uses the resolver for DialContext requests
 			ctx.Logf("proxy: attempt round trip for %s", req.Host)
-			tr := RoundTripper(c.Resolver, ctx)
+			tr := roundTripper(c.Resolver, ctx)
 			resp, err = tr.RoundTrip(req)
 			if err != nil {
 				err = fmt.Errorf("proxy: unable to round trip %s: %v", req.Host, err)

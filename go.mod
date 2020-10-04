@@ -1,6 +1,6 @@
 module github.com/buffrr/letsdane
 
-go 1.14
+go 1.15
 
 require (
 	github.com/buffrr/hsig0 v0.0.0-20200928223456-eca10c3b5481
