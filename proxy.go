@@ -13,11 +13,12 @@ import (
 )
 
 type Config struct {
-	Certificate *x509.Certificate
-	PrivateKey  interface{}
-	Validity    time.Duration
-	Resolver    resolver.Resolver
-	Verbose     bool
+	Certificate        *x509.Certificate
+	PrivateKey         interface{}
+	Validity           time.Duration
+	Resolver           resolver.Resolver
+	ConstraintsEnabled bool
+	Verbose            bool
 }
 
 type tlsDialConfig struct {
@@ -35,6 +36,9 @@ func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
 		host, port, err := net.SplitHostPort(req.Host)
 		if err != nil {
 			ctx.Logf("proxy: invalid host %s", req.Host)
+			return false
+		}
+		if net.ParseIP(host) != nil || c.rejectDomain(host) {
 			return false
 		}
 
@@ -113,6 +117,23 @@ func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) error {
 	}
 
 	return nil
+}
+
+func (c *Config) rejectDomain(domain string) bool {
+	if !c.ConstraintsEnabled {
+		return false
+	}
+	tld := domain
+L:
+	for i := len(domain) - 1; i >= 0; i-- {
+		if domain[i] == '.' {
+			tld = domain[i+1:]
+			break L
+		}
+	}
+
+	_, ok := nameConstraints[tld]
+	return ok
 }
 
 func (c *Config) Handler() (http.Handler, error) {

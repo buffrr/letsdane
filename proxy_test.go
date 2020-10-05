@@ -73,3 +73,32 @@ func TestProxyTLSAFilter(t *testing.T) {
 	}
 
 }
+
+func TestProxyAcceptDomain(t *testing.T) {
+	c := &Config{ConstraintsEnabled: true}
+	assertFalse(t, c.rejectDomain(""))
+	assertFalse(t, c.rejectDomain("."))
+	assertTrue(t, c.rejectDomain("org"))
+	assertTrue(t, c.rejectDomain(".com"))
+	assertTrue(t, c.rejectDomain("hello.com"))
+	assertTrue(t, c.rejectDomain("test.domain.google"))
+
+	assertFalse(t, c.rejectDomain("no-thanks"))
+
+	c.ConstraintsEnabled = false
+	assertFalse(t, c.rejectDomain("hello.com"))
+}
+
+func assertTrue(t *testing.T, cond bool) {
+	if !cond {
+		t.Helper()
+		t.Error()
+	}
+}
+
+func assertFalse(t *testing.T, cond bool) {
+	if cond {
+		t.Helper()
+		t.Error()
+	}
+}

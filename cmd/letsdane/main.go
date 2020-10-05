@@ -257,6 +257,7 @@ func setupUnbound() (u *rs.Unbound, err error) {
 }
 
 var errNoKey = errors.New("no key found")
+
 // parses hsd format: key@host:port
 func splitHostPortKey(addr string) (hostport string, key *hsig0.PublicKey, err error) {
 	s := strings.Split(strings.TrimSpace(addr), "@")
@@ -285,7 +286,6 @@ func main() {
 	default:
 		log.Fatal(err)
 	}
-
 
 	if *ad {
 		if !sig0 && !isLoopback(*raddr) {
@@ -316,11 +316,12 @@ func main() {
 
 	ca, priv := parseCA()
 	c := &letsdane.Config{
-		Certificate: ca,
-		PrivateKey:  priv,
-		Validity:    *validity,
-		Resolver:    resolver,
-		Verbose:     *verbose,
+		Certificate:        ca,
+		PrivateKey:         priv,
+		Validity:           *validity,
+		Resolver:           resolver,
+		ConstraintsEnabled: *skipICANN,
+		Verbose:            *verbose,
 	}
 
 	if *output != "" {
