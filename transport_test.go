@@ -2,6 +2,7 @@ package letsdane
 
 import (
 	"bytes"
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -103,7 +104,7 @@ func TestRoundTripperTLS(t *testing.T) {
 	}
 
 	client := ts.Client()
-	client.Transport = roundTripper(rs, nil)
+	client.Transport = roundTripper(rs)
 
 	// nil context
 	_, err := client.Get(requrl)
@@ -125,10 +126,11 @@ func TestRoundTripperTLS(t *testing.T) {
 		Config:  newDANEConfig(host, tlsaRRs),
 	}
 
-	client.Transport = roundTripper(rs, &goproxy.ProxyCtx{
-		UserData: authRes,
-	})
-	_, err = client.Get(requrl)
+	client.Transport = roundTripper(rs)
+	req, _ := http.NewRequest("GET", requrl, nil)
+	ctx := context.WithValue(context.Background(), "dialConfig", authRes)
+	req = req.WithContext(ctx)
+	_, err = client.Do(req)
 	if err == nil {
 		t.Fatalf("want error")
 	}
@@ -139,11 +141,12 @@ func TestRoundTripperTLS(t *testing.T) {
 	authRes.TLSA = rs.tlsaRRs
 	authRes.Config = newDANEConfig(host, rs.tlsaRRs)
 
-	client.Transport = roundTripper(rs, &goproxy.ProxyCtx{
-		UserData: authRes,
-	})
+	client.Transport = roundTripper(rs)
 
-	res, err := client.Get(requrl)
+	req, _ = http.NewRequest("GET", requrl, nil)
+	ctx = context.WithValue(context.Background(), "dialConfig", authRes)
+	req = req.WithContext(ctx)
+	res, err := client.Do(req)
 
 	if err != nil {
 		t.Fatal(err)
@@ -165,7 +168,7 @@ func TestRoundTripperTLS(t *testing.T) {
 	_, _, tlsa3 := testCreateCertTLSAPair(1, 0, 1)
 	rs.tlsaRRs = []*dns.TLSA{&tlsa3}
 	authRes.TLSA = rs.tlsaRRs
-	client.Transport = roundTripper(rs, nil)
+	client.Transport = roundTripper(rs)
 	_, err = client.Get(requrl)
 
 	if err == nil {
@@ -191,7 +194,7 @@ func TestRoundTripperNoTLS(t *testing.T) {
 	}
 
 	client := ts.Client()
-	client.Transport = roundTripper(rs, nil)
+	client.Transport = roundTripper(rs)
 
 	res, err := client.Get(requrl)
 	if err != nil {

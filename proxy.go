@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"fmt"
 	"github.com/buffrr/letsdane/resolver"
 	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
@@ -22,14 +21,13 @@ type Config struct {
 }
 
 type tlsDialConfig struct {
-	Fail error
-	Host string
-	Port string
+	Fail    error
+	Host    string
+	Port    string
 	Network string
-	IPs  []net.IP
-	TLSA []*dns.TLSA
-	Config *tls.Config
-	Conn net.Conn
+	IPs     []net.IP
+	TLSA    []*dns.TLSA
+	Config  *tls.Config
 }
 
 func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
@@ -67,11 +65,11 @@ func tlsaFilterFunc(c *Config) goproxy.ReqConditionFunc {
 		}
 
 		res := &tlsDialConfig{
-			Fail: blockError,
-			IPs:  ips,
-			TLSA: ans,
-			Host: host,
-			Port: port,
+			Fail:    blockError,
+			IPs:     ips,
+			TLSA:    ans,
+			Host:    host,
+			Port:    port,
 			Network: "tcp",
 		}
 		ctx.UserData = res
@@ -86,25 +84,12 @@ var handleConnect = func(host string, ctx *goproxy.ProxyCtx) (*goproxy.ConnectAc
 		return goproxy.RejectConnect, host
 	}
 	if dialConfig.Fail != nil {
-		ctx.Logf("proxy: fail reject connect: %v", dialConfig.Fail)
+		ctx.Logf("proxy: reject connect: %v", dialConfig.Fail)
 		return goproxy.RejectConnect, host
 	}
 
-	// dial remote server before starting local handshake with client
-	// if DANE handshake fails, reject the connect request early
-	// a successful tls connection will be added to ctx to get consumed
-	// by transport.
-	dialConfig.Config = newDANEConfig(dialConfig.Host, dialConfig.TLSA)
-	conn, err := dialTLSContext(context.Background(), dialConfig)
-	if err != nil {
-		ctx.Logf("proxy: dial tls failed: %v", dialConfig.Fail)
-		return goproxy.RejectConnect, host
-	}
-
-	dialConfig.Conn = conn
-	ctx.Logf("proxy: mitming connect")
+	ctx.Logf("proxy: mitming host %s", host)
 	return goproxy.MitmConnect, host
-
 }
 
 func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) error {
@@ -133,26 +118,17 @@ func (c *Config) setupMITM(p *goproxy.ProxyHttpServer) error {
 func (c *Config) Handler() (http.Handler, error) {
 	p := goproxy.NewProxyHttpServer()
 	// ConnectDial is only used for non mitm ed CONNECT requests
-	// the configured resolver should still be used for all requests
+	// the configured resolver should still be used
 	p.ConnectDial = dialFunc(c.Resolver)
 	p.Verbose = c.Verbose
 	if err := c.setupMITM(p); err != nil {
 		return nil, err
 	}
 
+	p.Tr = roundTripper(c.Resolver)
 	p.OnRequest().DoFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
-		ctx.RoundTripper = goproxy.RoundTripperFunc(func(req *http.Request, ctx *goproxy.ProxyCtx) (resp *http.Response, err error) {
-			// the custom round tripper expects an tlsDialConfig in the ctx for DialTLSContext
-			// it also uses the resolver for DialContext requests
-			ctx.Logf("proxy: attempt round trip for %s", req.Host)
-			tr := roundTripper(c.Resolver, ctx)
-			resp, err = tr.RoundTrip(req)
-			if err != nil {
-				err = fmt.Errorf("proxy: unable to round trip %s: %v", req.Host, err)
-			}
-			return
-		})
-		return req, nil
+		newctx := context.WithValue(req.Context(), "dialConfig", ctx.UserData)
+		return req.WithContext(newctx), nil
 	})
 
 	return p, nil

@@ -6,7 +6,6 @@ import (
 	"crypto/x509"
 	"fmt"
 	"github.com/buffrr/letsdane/resolver"
-	"github.com/elazarl/goproxy"
 	"github.com/miekg/dns"
 	"net"
 	"net/http"
@@ -36,30 +35,24 @@ func (t *tlsError) Error() string {
 
 // roundTripper creates a round tripper capable of performing DANE/TLSA
 // verification. Uses the given resolver for dns lookups.
-func roundTripper(rs resolver.Resolver, gContext *goproxy.ProxyCtx) http.RoundTripper {
+func roundTripper(rs resolver.Resolver) *http.Transport {
 	return &http.Transport{
 		DialContext: func(ctx context.Context, network, addr string) (conn net.Conn, err error) {
 			return dialContextResolver(ctx, network, addr, rs)
 		},
 		DialTLSContext: func(ctx context.Context, network, address string) (net.Conn, error) {
-			if gContext == nil {
-				return nil, fmt.Errorf("transport: no ctx available")
-			}
-			if res, ok := gContext.UserData.(*tlsDialConfig); ok {
+			if res, ok := ctx.Value("dialConfig").(*tlsDialConfig); ok {
 				if res.Fail != nil {
 					return nil, fmt.Errorf("transport: %v", res.Fail)
 				}
-				// check if a connection already exists
-				if res.Conn != nil {
-					return res.Conn, nil
-				}
 				if network != res.Network {
-					return nil, fmt.Errorf("transport: specified network %s does not match %s", network, res.Network)
+					return nil, fmt.Errorf("transport: specified network %s does not match network %s in tlsa record", network, res.Network)
 				}
 
+				res.Config = newDANEConfig(res.Host, res.TLSA)
 				return dialTLSContext(ctx, res)
 			}
-			return nil, fmt.Errorf("transport: address %s not reachable", address)
+			return nil, fmt.Errorf("transport: no dial config available for %s", address)
 		},
 		TLSHandshakeTimeout:   TLSHandshakeTimeout,
 		ExpectContinueTimeout: ExpectContinueTimeout,
@@ -116,9 +109,6 @@ func verifyConnection(rrs []*dns.TLSA) func(cs tls.ConnectionState) error {
 
 // dialTLSContext connects to the network using the dst configuration and initiates a TLS handshake.
 func dialTLSContext(ctx context.Context, dst *tlsDialConfig) (*tls.Conn, error) {
-	if dst.Conn != nil {
-		return nil, fmt.Errorf("transport: dial tls context: connection already exists")
-	}
 	tlsDialer := &tls.Dialer{
 		NetDialer: &dialer,
 		Config:    dst.Config,
