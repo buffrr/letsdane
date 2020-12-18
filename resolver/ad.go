@@ -6,7 +6,6 @@ import (
 	"github.com/miekg/dns"
 	"net"
 	"strings"
-	"sync"
 	"time"
 )
 
@@ -101,27 +100,21 @@ func (rs *AD) LookupIP(hostname string, secure bool) ([]net.IP, error) {
 		return ips, fmt.Errorf("ad: ip lookup failed: %v", err)
 	}
 
-	var wg sync.WaitGroup
+	done := make(chan struct{})
 	var ipv4, ipv6 []net.IP
 	var errIPv4, errIPv6 error
 
-	wg.Add(2)
 	go func() {
 		ipv4, errIPv4 = rs.lookupIPv4(hostname, secure)
-		wg.Done()
+		done <- struct{}{}
 	}()
 
-	go func() {
-		ipv6, errIPv6 = rs.lookupIPv6(hostname, secure)
-		wg.Done()
-	}()
+	ipv6, errIPv6 = rs.lookupIPv6(hostname, secure)
+	<-done
 
-	wg.Wait()
-	if errIPv4 != nil {
-		return nil, errIPv4
-	}
-	if errIPv6 != nil {
-		return nil, errIPv6
+	// return an error only if both lookups fail because some nameservers return servfail for ipv6
+	if errIPv4 != nil && errIPv6 != nil {
+		return nil, fmt.Errorf("ad: ip lookup failed: [ipv4: %v, ipv6: %v]", errIPv4, errIPv6)
 	}
 
 	return append(ipv4, ipv6...), nil
