@@ -98,7 +98,7 @@ func (rs *AD) LookupIP(hostname string, secure bool) ([]net.IP, error) {
 			return []net.IP{}, nil
 		}
 		ips, err := net.LookupIP(hostname)
-		return ips, err
+		return ips, fmt.Errorf("ad: ip lookup failed: %v", err)
 	}
 
 	var wg sync.WaitGroup
@@ -179,7 +179,7 @@ func (rs *AD) LookupTLSA(service, proto, name string, secure bool) ([]*dns.TLSA,
 
 	rr, ad, err := rs.lookup(q, dns.TypeTLSA)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("ad: tlsa lookup failed: %v", err)
 	}
 
 	if !ad && secure {
@@ -214,16 +214,16 @@ func (rs *AD) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 
 	if rs.Verify != nil {
 		if err := rs.Verify(r) ; err != nil {
-			return nil, false, fmt.Errorf("ad: verify error: %v", err)
+			return nil, false, fmt.Errorf("verify error: %v", err)
 		}
 	}
 
 	if r.Truncated {
-		return nil, false, errors.New("ad: response truncated")
+		return nil, false, errors.New("response truncated")
 	}
 
 	if r.Rcode == dns.RcodeServerFailure {
-		return nil, false, ErrServFail
+		return nil, false, errServFail
 	}
 
 	if r.Rcode == dns.RcodeSuccess || r.Rcode == dns.RcodeNameError {
@@ -238,7 +238,7 @@ func (rs *AD) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 		return e.msg, e.secure, nil
 	}
 
-	return nil, false, fmt.Errorf("ad: lookup failed with rcode %d", r.Rcode)
+	return nil, false, fmt.Errorf("failed with rcode %d", r.Rcode)
 }
 
 // getMinTTL get the ttl for dns msg
