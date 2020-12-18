@@ -197,6 +197,7 @@ func (rs *AD) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 
 	m := new(dns.Msg)
 	m.SetQuestion(dns.Fqdn(name), qtype)
+	m.SetEdns0(4096, false)
 	m.RecursionDesired = true
 	m.AuthenticatedData = true
 
