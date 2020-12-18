@@ -11,7 +11,6 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"fmt"
-	"github.com/elazarl/goproxy"
 	"math/big"
 	"net"
 	"sync"
@@ -144,23 +143,20 @@ func newMITMConfig(ca *x509.Certificate, privateKey interface{}, validity time.D
 	}, nil
 }
 
-// tlsForHost returns a *tls.mitmConfig that will generate certificates on-the-fly
+// configForTLSADomain returns a *tls.mitmConfig that will generate certificates on-the-fly
 // using the provided hostname
-func (c *mitmConfig) tlsForHost(hostname string, ctx *goproxy.ProxyCtx) *tls.Config {
+func (c *mitmConfig) configForTLSADomain(tlsaDomain string) *tls.Config {
 	return &tls.Config{
-		InsecureSkipVerify: false,
 		GetCertificate: func(clientHello *tls.ClientHelloInfo) (*tls.Certificate, error) {
-			if hostname != clientHello.ServerName {
-				return nil, fmt.Errorf("hostname %s does not match server name %s", hostname, clientHello.ServerName)
+			if tlsaDomain != clientHello.ServerName {
+				return nil, fmt.Errorf("tlsa domain `%s` does not match server name `%s`", tlsaDomain, clientHello.ServerName)
 			}
-
-			return c.cert(hostname, ctx)
+			return c.cert(tlsaDomain)
 		},
-		NextProtos: []string{"http/1.1"},
 	}
 }
 
-func (c *mitmConfig) cert(hostname string, ctx *goproxy.ProxyCtx) (*tls.Certificate, error) {
+func (c *mitmConfig) cert(hostname string) (*tls.Certificate, error) {
 	// Remove the port if it exists.
 	host, _, err := net.SplitHostPort(hostname)
 	if err == nil {
@@ -172,8 +168,6 @@ func (c *mitmConfig) cert(hostname string, ctx *goproxy.ProxyCtx) (*tls.Certific
 	c.certmu.RUnlock()
 
 	if ok {
-		ctx.Logf("mitm cert: cache hit for %s", hostname)
-
 		// Check validity of the certificate for hostname match, expiry, etc. In
 		// particular, if the cached certificate has expired, create a new one.
 		if _, err := tlsc.Leaf.Verify(x509.VerifyOptions{
@@ -183,10 +177,7 @@ func (c *mitmConfig) cert(hostname string, ctx *goproxy.ProxyCtx) (*tls.Certific
 			return tlsc, nil
 		}
 
-		ctx.Logf("mitm cert: invalid certificate in cache for %s", hostname)
 	}
-
-	ctx.Logf("mitm cert: cache miss for %s", hostname)
 
 	serial, err := rand.Int(rand.Reader, maxSerialNumber)
 	if err != nil {
