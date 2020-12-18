@@ -75,7 +75,7 @@ Wait:
 		select {
 		case r := <-c:
 			if r.Bogus {
-				err = fmt.Errorf("unbound: bogus: %s: %w", r.WhyBogus, ErrServFail)
+				err = fmt.Errorf("unbound: bogus: %s: %w", r.WhyBogus, errServFail)
 			}
 
 			if !secure || r.Secure {
@@ -114,7 +114,13 @@ func (u *Unbound) LookupTLSA(service, proto, name string, secure bool) (tlsa []*
 	}
 
 	if r.Bogus {
-		return nil, fmt.Errorf("unbound: bogus: %s: %w", r.WhyBogus, ErrServFail)
+		return nil, fmt.Errorf("unbound: bogus: %s: %w", r.WhyBogus, errServFail)
+	}
+
+	// even if the response is not bugs servfail does not indicate
+	// that the server responded properly
+	if r.Rcode == dns.RcodeServerFailure {
+		return nil, fmt.Errorf("unbound: servfail: %d: %w", r.Rcode, errServFail)
 	}
 
 	if !r.Secure && secure {
