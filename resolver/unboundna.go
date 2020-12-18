@@ -30,11 +30,11 @@ func (u *Unbound) AddTAFile(file string) error {
 	return ErrUnboundNotAvail
 }
 
-func (u *Unbound) LookupIP(host string, secure bool) (addrs []net.IP, err error) {
+func (u *Unbound) LookupIP(host string) (addrs []net.IP, err error) {
 	return nil, ErrUnboundNotAvail
 }
 
-func (u *Unbound) LookupTLSA(service, proto, name string, secure bool) (tlsa []*dns.TLSA, err error) {
+func (u *Unbound) LookupTLSA(service, proto, name string) (tlsa []*dns.TLSA, err error) {
 	return nil, ErrUnboundNotAvail
 }
 
