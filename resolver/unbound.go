@@ -46,29 +46,11 @@ func (u *Unbound) ResolvConf(name string) error {
 	return u.ub.ResolvConf(name)
 }
 
-func (u *Unbound) LookupIP(host string, secure bool) (addrs []net.IP, err error) {
-	// this method is the body of LookupIP in github.com/miekg/unbound
-	//modified here to check for bogus & secure
-	ip := net.ParseIP(host)
-	if ip != nil {
-		if secure {
-			return []net.IP{}, nil
-		}
-		return []net.IP{ip}, nil
-	}
-
-	if !shouldResolve(host) {
-		if secure {
-			return []net.IP{}, nil
-		}
-		ips, err := net.LookupIP(host)
-		return ips, err
-	}
-
+func (u *Unbound) LookupIP(host string) (addrs []net.IP, err error){
+	// taken from miekg/unbound added check for bogus
 	c := make(chan *unbound.ResultError)
-	host = dns.Fqdn(host)
-	u.resolvAsync(host, dns.TypeA, dns.ClassINET, c)
-	u.resolvAsync(host, dns.TypeAAAA, dns.ClassINET, c)
+	u.ub.ResolveAsync(host, dns.TypeA, dns.ClassINET, c)
+	u.ub.ResolveAsync(host, dns.TypeAAAA, dns.ClassINET, c)
 	seen := 0
 Wait:
 	for {
@@ -76,19 +58,17 @@ Wait:
 		case r := <-c:
 			if r.Bogus {
 				err = fmt.Errorf("unbound: bogus: %s: %w", r.WhyBogus, errServFail)
+				return
 			}
 
-			if !secure || r.Secure {
-				for _, rr := range r.Rr {
-					if x, ok := rr.(*dns.A); ok {
-						addrs = append(addrs, x.A)
-					}
-					if x, ok := rr.(*dns.AAAA); ok {
-						addrs = append(addrs, x.AAAA)
-					}
+			for _, rr := range r.Rr {
+				if x, ok := rr.(*dns.A); ok {
+					addrs = append(addrs, x.A)
+				}
+				if x, ok := rr.(*dns.AAAA); ok {
+					addrs = append(addrs, x.AAAA)
 				}
 			}
-
 			seen++
 			if seen == 2 {
 				break Wait
@@ -98,7 +78,7 @@ Wait:
 	return
 }
 
-func (u *Unbound) LookupTLSA(service, proto, name string, secure bool) (tlsa []*dns.TLSA, err error) {
+func (u *Unbound) LookupTLSA(service, proto, name string) (tlsa []*dns.TLSA, err error) {
 	if net.ParseIP(name) != nil || !shouldResolve(name) {
 		return []*dns.TLSA{}, nil
 	}
@@ -123,7 +103,7 @@ func (u *Unbound) LookupTLSA(service, proto, name string, secure bool) (tlsa []*
 		return nil, fmt.Errorf("unbound: servfail: %d: %w", r.Rcode, errServFail)
 	}
 
-	if !r.Secure && secure {
+	if !r.Secure {
 		return []*dns.TLSA{}, nil
 	}
 	for _, rr := range r.Rr {

@@ -17,38 +17,38 @@ func TestAD_LookupTLSA(t *testing.T) {
 		return reply, 0, nil
 	}
 
-	ans, err := rs.LookupTLSA("443", "tcp", "example.com", true)
+	ans, err := rs.LookupTLSA("443", "tcp", "example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(ans) != 1 {
-		t.Fatalf("have %d, want 1", len(ans))
+		t.Fatalf("got %d, want 1", len(ans))
 	}
 
-	ans, err = rs.LookupTLSA("443", "tcp", "no-ad.example.com", true)
+	ans, err = rs.LookupTLSA("443", "tcp", "no-ad.example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(ans) != 0 {
-		t.Fatalf("have %d, want no results", len(ans))
+		t.Fatalf("got %d, want no results", len(ans))
 	}
 
-	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org", false); err == nil {
+	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org", true); err == nil {
+	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	ans, _ = rs.LookupTLSA("443", "tcp", "localhost", true)
+	ans, _ = rs.LookupTLSA("443", "tcp", "localhost")
 	if len(ans) != 0 {
 		t.Fatal("want no answers")
 	}
 
-	ans, _ = rs.LookupTLSA("443", "tcp", "1.1.1.1", true)
+	ans, _ = rs.LookupTLSA("443", "tcp", "1.1.1.1")
 	if len(ans) != 0 {
 		t.Fatal("want no answers")
 	}
@@ -63,33 +63,33 @@ func TestAD_LookupIP(t *testing.T) {
 		return reply, 0, nil
 	}
 
-	if _, err := rs.LookupIP("dnssec-failed.org", false); err == nil {
+	if _, err := rs.LookupIP("dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	if _, err := rs.LookupIP("dnssec-failed.org", true); err == nil {
+	if _, err := rs.LookupIP("dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	ips, err := rs.LookupIP("example.com", false)
+	ips, err := rs.LookupIP("example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	if len(ips) != 1 {
-		t.Fatalf("have %d, want 1 ip address", len(ips))
+		t.Fatalf("got %d, want 1 ip address", len(ips))
 	}
 
-	ips, err = rs.LookupIP("ad.example.com", true)
+	ips, err = rs.LookupIP("ad.example.com")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(ips) != 1 {
-		t.Fatalf("have %d, want 1 ip address", len(ips))
+	if len(ips) != 2 {
+		t.Fatalf("got %d, want 2 ip address", len(ips))
 	}
 
-	ips, err = rs.LookupIP("localhost", false)
+	ips, err = rs.LookupIP("localhost")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestAD_LookupIP(t *testing.T) {
 		t.Fatal("resolver shouldn't attempt to resolve localhost")
 	}
 
-	ips, err = rs.LookupIP("1.1.1.1", false)
+	ips, err = rs.LookupIP("1.1.1.1")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,15 +123,15 @@ func TestAD_Verify(t *testing.T) {
 		return nil
 	}
 
-	if _, err := rs.LookupIP("ad.example.com", true); err == nil {
+	if _, err := rs.LookupIP("ad.example.com"); err == nil {
 		t.Fatal("want query to fail")
 	}
-	if _, err := rs.LookupIP("example.com", true); err != nil {
+	if _, err := rs.LookupIP("example.com"); err != nil {
 		t.Fatal(err)
 	}
 
 	rs.Verify = nil
-	if _, err := rs.LookupIP("ad.example.com", true); err != nil {
+	if _, err := rs.LookupIP("ad.example.com"); err != nil {
 		t.Fatal("want no error")
 	}
 }

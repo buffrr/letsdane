@@ -83,21 +83,19 @@ func (rs *AD) checkCache(key string, qtype uint16) (*entry, bool) {
 
 // LookupIP looks up host using the specified resolver.
 // It returns a slice of the host's IPv4 and IPv6 addresses.
-func (rs *AD) LookupIP(hostname string, secure bool) ([]net.IP, error) {
+func (rs *AD) LookupIP(hostname string) ([]net.IP, error) {
 	ip := net.ParseIP(hostname)
 	if ip != nil {
-		if secure {
-			return []net.IP{}, nil
-		}
 		return []net.IP{ip}, nil
 	}
 
 	if !shouldResolve(hostname) {
-		if secure {
-			return []net.IP{}, nil
-		}
 		ips, err := net.LookupIP(hostname)
-		return ips, fmt.Errorf("ad: ip lookup failed: %v", err)
+		if err != nil {
+			err = fmt.Errorf("ad: ip lookup failed: %v", err)
+		}
+
+		return ips, err
 	}
 
 	done := make(chan struct{})
@@ -105,11 +103,11 @@ func (rs *AD) LookupIP(hostname string, secure bool) ([]net.IP, error) {
 	var errIPv4, errIPv6 error
 
 	go func() {
-		ipv4, errIPv4 = rs.lookupIPv4(hostname, secure)
+		ipv4, errIPv4 = rs.lookupIPv4(hostname)
 		done <- struct{}{}
 	}()
 
-	ipv6, errIPv6 = rs.lookupIPv6(hostname, secure)
+	ipv6, errIPv6 = rs.lookupIPv6(hostname)
 	<-done
 
 	// return an error only if both lookups fail because some nameservers return servfail for ipv6
@@ -120,14 +118,10 @@ func (rs *AD) LookupIP(hostname string, secure bool) ([]net.IP, error) {
 	return append(ipv4, ipv6...), nil
 }
 
-func (rs *AD) lookupIPv4(hostname string, secure bool) ([]net.IP, error) {
-	rr, ad, err := rs.lookup(hostname, dns.TypeA)
+func (rs *AD) lookupIPv4(hostname string) ([]net.IP, error) {
+	rr, _, err := rs.lookup(hostname, dns.TypeA)
 	if err != nil {
 		return nil, err
-	}
-
-	if secure && !ad {
-		return []net.IP{}, nil
 	}
 
 	var ips []net.IP
@@ -140,13 +134,10 @@ func (rs *AD) lookupIPv4(hostname string, secure bool) ([]net.IP, error) {
 	return ips, nil
 }
 
-func (rs *AD) lookupIPv6(hostname string, secure bool) ([]net.IP, error) {
-	rr, ad, err := rs.lookup(hostname, dns.TypeAAAA)
+func (rs *AD) lookupIPv6(hostname string) ([]net.IP, error) {
+	rr, _, err := rs.lookup(hostname, dns.TypeAAAA)
 	if err != nil {
 		return nil, err
-	}
-	if secure && !ad {
-		return []net.IP{}, nil
 	}
 
 	var ips []net.IP
@@ -160,7 +151,7 @@ func (rs *AD) lookupIPv6(hostname string, secure bool) ([]net.IP, error) {
 }
 
 // LookupTLSA finds the TLSA resource record
-func (rs *AD) LookupTLSA(service, proto, name string, secure bool) ([]*dns.TLSA, error) {
+func (rs *AD) LookupTLSA(service, proto, name string) ([]*dns.TLSA, error) {
 	if net.ParseIP(name) != nil || !shouldResolve(name) {
 		return []*dns.TLSA{}, nil
 	}
@@ -175,7 +166,7 @@ func (rs *AD) LookupTLSA(service, proto, name string, secure bool) ([]*dns.TLSA,
 		return nil, fmt.Errorf("ad: tlsa lookup failed: %v", err)
 	}
 
-	if !ad && secure {
+	if !ad {
 		return []*dns.TLSA{}, nil
 	}
 
@@ -281,11 +272,3 @@ func shouldResolve(hostname string) bool {
 	return tld != "test" && tld != "example" && tld != "invalid" && tld != "localhost"
 }
 
-// GetTLSAPrefix returns the TLSA prefix for the given host:port
-func GetTLSAPrefix(host string) string {
-	h, p, err := net.SplitHostPort(host)
-	if err != nil {
-		return host
-	}
-	return fmt.Sprintf("_%s._tcp.%s", p, h)
-}
