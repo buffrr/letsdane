@@ -9,7 +9,7 @@ Let's DANE enables the use of [DANE (DNS Based Authentication of Named Entities)
 <p align="center">
 <br>
 <br>
-<img src="chrome.png" width="400px" alt="Let's DANE Handshake"/>
+<img src="chrome.png" width="600px" alt="Let's DANE Handshake"/>
 </p>
 
 <p align="center">
@@ -19,7 +19,7 @@ This domain is DNSSEC signed with <a href="https://ed25519.nl/">ed25519</a> on a
 
 
 <p align="center">
-<img src="firefox.png" width="400px" alt="Let's DANE verified DNSSEC"/><br/>
+<img src="firefox.png" width="600px" alt="Let's DANE verified DNSSEC"/><br/>
 
 </p>
 
