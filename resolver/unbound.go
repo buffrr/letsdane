@@ -9,7 +9,6 @@ import (
 	"net"
 )
 
-
 type Unbound struct {
 	ub          *unbound.Unbound
 	resolvAsync func(name string, rrtype, rrclass uint16, c chan *unbound.ResultError)
@@ -46,7 +45,7 @@ func (u *Unbound) ResolvConf(name string) error {
 	return u.ub.ResolvConf(name)
 }
 
-func (u *Unbound) LookupIP(host string) (addrs []net.IP, err error){
+func (u *Unbound) LookupIP(host string) (addrs []net.IP, err error) {
 	// taken from miekg/unbound added check for bogus
 	c := make(chan *unbound.ResultError)
 	u.ub.ResolveAsync(host, dns.TypeA, dns.ClassINET, c)

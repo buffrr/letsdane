@@ -56,11 +56,11 @@ func TestUnbound_LookupTLSA(t *testing.T) {
 		t.Fatalf("got %d, want no results", len(ans))
 	}
 
-	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org") ; err == nil {
+	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org") ; err == nil {
+	if _, err := rs.LookupTLSA("443", "tcp", "dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
@@ -75,7 +75,6 @@ func TestUnbound_LookupTLSA(t *testing.T) {
 	}
 }
 
-
 func TestUnbound_LookupIP(t *testing.T) {
 	rs := &Unbound{
 		ub: nil,
@@ -89,11 +88,11 @@ func TestUnbound_LookupIP(t *testing.T) {
 		},
 	}
 
-	if _, err := rs.LookupIP("dnssec-failed.org") ; err == nil {
+	if _, err := rs.LookupIP("dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
-	if _, err := rs.LookupIP("dnssec-failed.org") ; err == nil {
+	if _, err := rs.LookupIP("dnssec-failed.org"); err == nil {
 		t.Fatal("want error servfail")
 	}
 
@@ -120,7 +119,7 @@ func TestUnbound_LookupIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(ips) == 1  && ips[0].Equal(net.ParseIP("1.1.1.1")) {
+	if len(ips) == 1 && ips[0].Equal(net.ParseIP("1.1.1.1")) {
 		t.Fatal("resolver shouldn't attempt to resolve localhost")
 	}
 
@@ -129,7 +128,7 @@ func TestUnbound_LookupIP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if len(ips) != 1 || !ips[0].Equal(net.ParseIP("1.1.1.1")){
+	if len(ips) != 1 || !ips[0].Equal(net.ParseIP("1.1.1.1")) {
 		t.Fatal("resolver shouldn't attempt to resolve ip addresses")
 	}
 }

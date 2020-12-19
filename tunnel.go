@@ -159,7 +159,7 @@ func (c *Config) NewHandler() (*proxy.Handler, error) {
 		defer func() {
 			if rws.err != nil {
 				log.Printf("http: %s %s %s://%s%s: %v", statusErr, req.Method,
-					req.URL.Scheme, req.URL.Host,req.URL.Path, rws.err)
+					req.URL.Scheme, req.URL.Host, req.URL.Path, rws.err)
 				return
 			}
 			if c.Verbose {

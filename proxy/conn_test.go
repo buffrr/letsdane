@@ -9,13 +9,13 @@ import (
 func TestConn_PeekClientHello(t *testing.T) {
 	srv, c := net.Pipe()
 	client := tls.Client(c, &tls.Config{
-		ServerName: "example.com",
+		ServerName:         "example.com",
 		InsecureSkipVerify: true,
-		NextProtos: []string{"foo"},
+		NextProtos:         []string{"foo"},
 	})
 	p := &Conn{
-		wh: func(i int) {},
-		Conn:        srv,
+		wh:   func(i int) {},
+		Conn: srv,
 	}
 
 	go func() {

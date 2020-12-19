@@ -198,7 +198,7 @@ func (rs *AD) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 	}
 
 	if rs.Verify != nil {
-		if err := rs.Verify(r) ; err != nil {
+		if err := rs.Verify(r); err != nil {
 			return nil, false, fmt.Errorf("verify error: %v", err)
 		}
 	}
@@ -271,4 +271,3 @@ func shouldResolve(hostname string) bool {
 
 	return tld != "test" && tld != "example" && tld != "invalid" && tld != "localhost"
 }
-

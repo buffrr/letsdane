@@ -53,8 +53,8 @@ func (p *Handler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 
 	conn, writeHeader := hijacker(w, req)
 	pc := Conn{
-		wh: writeHeader,
-		Conn:        conn,
+		wh:   writeHeader,
+		Conn: conn,
 	}
 
 	addr := req.URL.Host
@@ -98,7 +98,7 @@ func hijacker(w http.ResponseWriter, req *http.Request) (c net.Conn, writeHeader
 	}
 
 	var localAddr, remoteAddr net.Addr
-	if addr, ok := req.Context().Value(http.LocalAddrContextKey).(net.Addr) ; ok {
+	if addr, ok := req.Context().Value(http.LocalAddrContextKey).(net.Addr); ok {
 		localAddr = addr
 		remoteAddr = netAddr{addr.Network(), req.RemoteAddr}
 	}

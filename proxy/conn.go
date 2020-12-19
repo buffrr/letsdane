@@ -24,14 +24,14 @@ func (pc *Conn) WriteHeader(code int) {
 // PeekClientHello attempts to read TLS ClientHello from the connection
 // without consuming the TLS handshake.
 func (pc *Conn) PeekClientHello() (*tls.ClientHelloInfo, error) {
-	if err := pc.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)) ; err != nil {
+	if err := pc.Conn.SetReadDeadline(time.Now().Add(10 * time.Second)); err != nil {
 		return nil, err
 	}
 
 	hello, conn, err := peekClientHello(pc.Conn)
 	pc.Conn = conn
 
-	if err := pc.Conn.SetReadDeadline(time.Time{}) ; err != nil {
+	if err := pc.Conn.SetReadDeadline(time.Time{}); err != nil {
 		return nil, err
 	}
 
@@ -60,7 +60,7 @@ type hijackConn struct {
 	io.Writer
 	io.ReadCloser
 	localAddr, remoteAddr net.Addr
-	flush func()
+	flush                 func()
 }
 
 func (c *hijackConn) Write(b []byte) (n int, err error) {
@@ -86,7 +86,7 @@ func (c *hijackConn) SetWriteDeadline(t time.Time) error { return nil }
 func peekClientHello(conn net.Conn) (hello *tls.ClientHelloInfo, newConn net.Conn, err error) {
 	p := &peekConn{
 		peek: new(bytes.Buffer),
-		r: conn,
+		r:    conn,
 	}
 
 	err = tls.Server(p, &tls.Config{
@@ -96,11 +96,11 @@ func peekClientHello(conn net.Conn) (hello *tls.ClientHelloInfo, newConn net.Con
 		},
 	}).Handshake()
 
-	if  hello != nil {
+	if hello != nil {
 		err = nil
 	}
 
-	newConn = readerConn{ io.MultiReader(p.peek, conn),  conn}
+	newConn = readerConn{io.MultiReader(p.peek, conn), conn}
 	return
 }
 
@@ -132,4 +132,4 @@ func (c peekConn) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (c peekConn) Write(p []byte) (int, error)  { return 0, io.EOF }
+func (c peekConn) Write(p []byte) (int, error) { return 0, io.EOF }

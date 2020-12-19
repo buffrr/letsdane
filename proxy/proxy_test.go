@@ -68,7 +68,6 @@ func TestHijacker(t *testing.T) {
 	}
 }
 
-
 func TestHandler_ServeHTTPTunnelerAddr(t *testing.T) {
 	f := TunnelerFunc(func(ctx context.Context, clientConn *Conn, network, addr string) {
 		if addr != "example.com:443" {
