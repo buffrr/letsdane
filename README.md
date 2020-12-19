@@ -1,6 +1,4 @@
-<h1 align="center">
-Let's DANE
-</h1>
+# Let's DANE
 
 **Note: Let's DANE is still under development, use at your own risk.**
  
