@@ -7,12 +7,10 @@ import (
 	"encoding/pem"
 	"errors"
 	"flag"
-	"fmt"
 	"github.com/buffrr/hsig0"
 	"github.com/buffrr/letsdane"
 	rs "github.com/buffrr/letsdane/resolver"
 	"github.com/miekg/dns"
-	"golang.org/x/crypto/ssh/terminal"
 	"io/ioutil"
 	"log"
 	"net"
@@ -31,10 +29,11 @@ var (
 	addr      = flag.String("addr", ":8080", "host:port of the proxy")
 	certPath  = flag.String("cert", "", "filepath to custom CA")
 	keyPath   = flag.String("key", "", "filepath to the CA's private key")
+	pass      = flag.String("pass", "", "CA passphrase or use DANE_CA_PASS environment variable to decrypt CA file (if encrypted)")
 	anchor    = flag.String("anchor", "", "path to trust anchor file (default: hardcoded 2017 KSK)")
 	verbose   = flag.Bool("verbose", false, "verbose output for debugging")
 	ad        = flag.Bool("skip-dnssec", false, "check ad flag only without dnssec validation")
-	skipICANN = flag.Bool("skip-icann", false, "Add all ICANN tlds to CA name constraints")
+	skipICANN = flag.Bool("skip-icann", false, "skip TLSA lookups for ICANN tlds and include them in the CA name constraints extension")
 	validity  = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
 )
 
@@ -57,32 +56,6 @@ func getConfPath() string {
 	}
 
 	return p
-}
-
-func readPassword(confirm bool) string {
-	fmt.Print("enter passphrase: ")
-	input, err := terminal.ReadPassword(0)
-	fmt.Println()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if !confirm {
-		return string(input)
-	}
-
-	fmt.Print("confirm passphrase: ")
-	verify, err := terminal.ReadPassword(0)
-	fmt.Println()
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if string(input) != string(verify) {
-		log.Fatal("passphrase didn't match")
-	}
-
-	return string(input)
 }
 
 func getOrCreateCA() (string, string) {
@@ -145,9 +118,13 @@ func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	var decryptedBlock []byte
 
 	if x509.IsEncryptedPEMBlock(block) {
-		decryptedBlock, err = x509.DecryptPEMBlock(block, []byte(readPassword(false)))
+		if *pass == "" {
+			*pass = os.Getenv("DANE_CA_PASS")
+		}
+
+		decryptedBlock, err = x509.DecryptPEMBlock(block, []byte(*pass))
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalf("decryption failed: %v", err)
 		}
 	} else {
 		decryptedBlock = keyPEMBlock
@@ -156,7 +133,7 @@ func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
 	return tls.X509KeyPair(certPEMBlock, decryptedBlock)
 }
 
-func parseCA() (*x509.Certificate, interface{}) {
+func loadCA() (*x509.Certificate, interface{}) {
 	var x509c *x509.Certificate
 	var priv interface{}
 
@@ -272,6 +249,13 @@ func splitHostPortKey(addr string) (hostport string, key *hsig0.PublicKey, err e
 
 func main() {
 	flag.Parse()
+
+	ca, priv := loadCA()
+	if *output != "" {
+		exportCA()
+		return
+	}
+
 	var resolver rs.Resolver
 	var sig0 bool
 
@@ -289,8 +273,8 @@ func main() {
 
 	if *ad {
 		if !sig0 && !isLoopback(*raddr) {
-			log.Printf("WARNING: you must have a local dnssec capable resolver to use letsdane securely")
-			log.Printf("WARNING: '%s' is not a loopback address (insecure)!", *raddr)
+			log.Printf("warning: you must have a local dnssec capable resolver to use letsdane securely")
+			log.Printf("warning: '%s' is not a loopback address (insecure)!", *raddr)
 		}
 
 		ad, err := rs.NewAD(*raddr)
@@ -314,7 +298,6 @@ func main() {
 		resolver = u
 	}
 
-	ca, priv := parseCA()
 	c := &letsdane.Config{
 		Certificate:        ca,
 		PrivateKey:         priv,
@@ -324,10 +307,6 @@ func main() {
 		Verbose:            *verbose,
 	}
 
-	if *output != "" {
-		exportCA()
-	}
-
-	log.Println("starting proxy on ", *addr)
+	log.Printf("Listening on %s", *addr)
 	log.Fatal(c.Run(*addr))
 }
