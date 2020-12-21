@@ -78,13 +78,13 @@ func (h *tunneler) Tunnel(ctx context.Context, clientConn *proxy.Conn, network, 
 	clientConn.WriteHeader(http.StatusOK)
 	hello, err := clientConn.PeekClientHello()
 	if err != nil {
-		h.warnf("unable to read local client hello: %v", statusErr, addr, err)
+		h.warnf("read client hello: %v", statusErr, addr, err)
 		return
 	}
 
 	tlsaDomain := addrs.Host
 	if tlsaDomain != hello.ServerName {
-		h.warnf("local client sni `%s` does not match tlsa domain `%s`", statusErr, addr, hello.ServerName, tlsaDomain)
+		h.warnf("client sni `%s` does not match tlsa domain `%s`", statusErr, addr, hello.ServerName, tlsaDomain)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (h *tunneler) Tunnel(ctx context.Context, clientConn *proxy.Conn, network, 
 
 	clientTLS := tls.Server(clientConn, clientTLSConfig)
 	if err := clientTLS.Handshake(); err != nil {
-		h.warnf("local handshake failed: %v", statusErr, addr, err)
+		h.warnf("client handshake failed: %v", statusErr, addr, err)
 		return
 	}
 
@@ -159,12 +159,12 @@ func (c *Config) NewHandler() (*proxy.Handler, error) {
 		rws := &rwStatusReader{ResponseWriter: rw}
 		defer func() {
 			if rws.err != nil {
-				log.Printf("http: %s %s %s://%s%s: %v", statusErr, req.Method,
+				log.Printf("[WARN] http: %s %s %s://%s%s: %v", statusErr, req.Method,
 					req.URL.Scheme, req.URL.Host, req.URL.Path, rws.err)
 				return
 			}
 			if c.Verbose {
-				log.Printf("http: %d %s %s://%s%s", rws.status, req.Method,
+				log.Printf("[INFO] http: %d %s %s://%s%s", rws.status, req.Method,
 					req.URL.Scheme, req.URL.Host, req.URL.Path)
 			}
 		}()
@@ -258,10 +258,10 @@ type logger struct {
 
 func (l logger) logf(format string, args ...interface{}) {
 	if l.verbose {
-		log.Printf(l.prefix+format, args...)
+		log.Printf("[INFO] "+l.prefix+format, args...)
 	}
 }
 
 func (l logger) warnf(format string, args ...interface{}) {
-	log.Printf(l.prefix+format, args...)
+	log.Printf("[WARN] "+l.prefix+format, args...)
 }

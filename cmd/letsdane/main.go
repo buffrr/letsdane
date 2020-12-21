@@ -274,8 +274,8 @@ func main() {
 
 	if *ad {
 		if !sig0 && !isLoopback(*raddr) {
-			log.Printf("warning: you must have a local dnssec capable resolver to use letsdane securely")
-			log.Printf("warning: '%s' is not a loopback address (insecure)!", *raddr)
+			log.Printf("You must have a local dnssec capable resolver to use letsdane securely")
+			log.Printf("'%s' is not a loopback address (insecure)!", *raddr)
 		}
 
 		ad, err := rs.NewAD(*raddr)
