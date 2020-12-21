@@ -20,12 +20,13 @@ import (
 const statusErr = "err"
 
 type Config struct {
-	Certificate        *x509.Certificate
-	PrivateKey         interface{}
-	Validity           time.Duration
-	Resolver           resolver.Resolver
-	ConstraintsEnabled bool
-	Verbose            bool
+	Certificate    *x509.Certificate
+	PrivateKey     interface{}
+	Validity       time.Duration
+	Resolver       resolver.Resolver
+	Constraints    bool
+	SkipNameChecks bool
+	Verbose        bool
 }
 
 type tunneler struct {
@@ -135,12 +136,12 @@ func (c *Config) NewHandler() (*proxy.Handler, error) {
 	p.Tunneler = &tunneler{
 		mitm:       mitm,
 		dialer:     dialer,
-		nameChecks: false,
+		nameChecks: !c.SkipNameChecks,
 		logger: logger{
 			prefix:  "tunnel: %v CONNECT %s ",
 			verbose: c.Verbose,
 		},
-		constraints: c.ConstraintsEnabled,
+		constraints: c.Constraints,
 	}
 
 	httpProxy := &httputil.ReverseProxy{

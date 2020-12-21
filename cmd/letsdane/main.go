@@ -23,18 +23,19 @@ import (
 const KSK2017 = `. IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D`
 
 var (
-	raddr     = flag.String("r", "", "dns resolvers to use (default: /etc/resolv.conf)")
-	output    = flag.String("o", "", "path to export the public CA file")
-	conf      = flag.String("conf", "", "dir path to store configuration (default: ~/.letsdane)")
-	addr      = flag.String("addr", ":8080", "host:port of the proxy")
-	certPath  = flag.String("cert", "", "filepath to custom CA")
-	keyPath   = flag.String("key", "", "filepath to the CA's private key")
-	pass      = flag.String("pass", "", "CA passphrase or use DANE_CA_PASS environment variable to decrypt CA file (if encrypted)")
-	anchor    = flag.String("anchor", "", "path to trust anchor file (default: hardcoded 2017 KSK)")
-	verbose   = flag.Bool("verbose", false, "verbose output for debugging")
-	ad        = flag.Bool("skip-dnssec", false, "check ad flag only without dnssec validation")
-	skipICANN = flag.Bool("skip-icann", false, "skip TLSA lookups for ICANN tlds and include them in the CA name constraints extension")
-	validity  = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
+	raddr          = flag.String("r", "", "dns resolvers to use (default: /etc/resolv.conf)")
+	output         = flag.String("o", "", "path to export the public CA file")
+	conf           = flag.String("conf", "", "dir path to store configuration (default: ~/.letsdane)")
+	addr           = flag.String("addr", ":8080", "host:port of the proxy")
+	certPath       = flag.String("cert", "", "filepath to custom CA")
+	keyPath        = flag.String("key", "", "filepath to the CA's private key")
+	pass           = flag.String("pass", "", "CA passphrase or use DANE_CA_PASS environment variable to decrypt CA file (if encrypted)")
+	anchor         = flag.String("anchor", "", "path to trust anchor file (default: hardcoded 2017 KSK)")
+	verbose        = flag.Bool("verbose", false, "verbose output for debugging")
+	ad             = flag.Bool("skip-dnssec", false, "check ad flag only without dnssec validation")
+	skipICANN      = flag.Bool("skip-icann", false, "skip TLSA lookups for ICANN tlds and include them in the CA name constraints extension")
+	validity       = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
+	skipNameChecks = flag.Bool("skip-namechecks", false, "disable name checks when matching DANE-EE TLSA reocrds.")
 )
 
 func getConfPath() string {
@@ -299,12 +300,13 @@ func main() {
 	}
 
 	c := &letsdane.Config{
-		Certificate:        ca,
-		PrivateKey:         priv,
-		Validity:           *validity,
-		Resolver:           resolver,
-		ConstraintsEnabled: *skipICANN,
-		Verbose:            *verbose,
+		Certificate:    ca,
+		PrivateKey:     priv,
+		Validity:       *validity,
+		Resolver:       resolver,
+		Constraints:    *skipICANN,
+		SkipNameChecks: *skipNameChecks,
+		Verbose:        *verbose,
 	}
 
 	log.Printf("Listening on %s", *addr)
