@@ -17,7 +17,10 @@ import (
 	"time"
 )
 
-const statusErr = "err"
+const (
+	Version   = "0.5"
+	statusErr = "err"
+)
 
 type Config struct {
 	Certificate    *x509.Certificate
@@ -192,8 +195,8 @@ func httpError(w http.ResponseWriter, error string, code int) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(code)
-	fmt.Fprintf(w, "<h1>%d %s</h1><p>%s</p>",
-		code, http.StatusText(code), html.EscapeString(error))
+	fmt.Fprintf(w, "<h1>%d %s</h1><p>%s</p><hr>letsdane/v%s",
+		code, http.StatusText(code), html.EscapeString(error), Version)
 }
 
 type rwStatusReader struct {

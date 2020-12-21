@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"flag"
+	"fmt"
 	"github.com/buffrr/hsig0"
 	"github.com/buffrr/letsdane"
 	rs "github.com/buffrr/letsdane/resolver"
@@ -36,6 +37,7 @@ var (
 	skipICANN      = flag.Bool("skip-icann", false, "skip TLSA lookups for ICANN tlds and include them in the CA name constraints extension")
 	validity       = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
 	skipNameChecks = flag.Bool("skip-namechecks", false, "disable name checks when matching DANE-EE TLSA reocrds.")
+	version        = flag.Bool("v", false, "show version")
 )
 
 func getConfPath() string {
@@ -250,6 +252,10 @@ func splitHostPortKey(addr string) (hostport string, key *hsig0.PublicKey, err e
 
 func main() {
 	flag.Parse()
+	if *version {
+		fmt.Printf("Version %s\n", letsdane.Version)
+		return
+	}
 
 	ca, priv := loadCA()
 	if *output != "" {
