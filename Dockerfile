@@ -1,8 +1,6 @@
 FROM golang:alpine
-RUN apk add --no-cache unbound-dev 
-RUN apk add --no-cache build-base
-WORKDIR /dane
-COPY . .
+RUN apk add --no-cache unbound-dev build-base
+COPY . /dane
 WORKDIR /dane/cmd/letsdane
 RUN go build -tags unbound
 
