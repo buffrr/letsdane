@@ -117,6 +117,31 @@ If you use `-skip-dnssec`, letsdane will use the Authenticated Data flag.
 
 I wanted to try DANE, but no browser currently supports it. It may still be a long way to go for browser support, but if you want to try it now you can!
 
+
+## Docker Usage
+
+### Docker CLI
+
+```bash
+docker run -dp 8080:8080 \
+  -v "$(pwd)"/dane:/root/.letsdane \
+  --restart unless-stopped \
+  anunayj/letsdane -verbose
+```
+### Docker-compose
+```yml
+version: '3.3'
+services:
+    letsdane:
+        ports:
+            - '8080:8080'
+        volumes:
+            - ./dane:/root/.letsdane 
+        command: ["-verbose"]
+        restart: unless-stopped
+        image: anunayj/letsdane
+```
+
 ## Contributing
 Contributions are welcome! 
 
