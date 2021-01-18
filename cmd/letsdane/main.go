@@ -76,7 +76,7 @@ func getOrCreateCA() (string, string) {
 				log.Fatalf("couldn't generate CA: %v", err)
 			}
 
-			certOut, err := os.Create(certPath)
+			certOut, err := os.OpenFile(certPath, os.O_CREATE|os.O_WRONLY, 0644)
 			if err != nil {
 				log.Fatalf("couldn't create CA file: %v", err)
 			}
@@ -93,7 +93,7 @@ func getOrCreateCA() (string, string) {
 				Bytes: x509.MarshalPKCS1PrivateKey(priv),
 			})
 
-			kOut, err := os.Create(keyPath)
+			kOut, err := os.OpenFile(keyPath, os.O_CREATE|os.O_WRONLY, 0600)
 			if err != nil {
 				log.Fatalf("couldn't create CA private key file: %v", err)
 			}
