@@ -100,6 +100,24 @@ handshake
 * https://letsdane
 * https://proofofconcept
 * https://humbly
+## Docker
+
+### Building an image
+
+To build a Docker image run:
+
+    git clone https://github.com/buffrr/letsdane
+    cd letsdane && docker build -t letsdane .
+
+### Running a container
+
+To start a container with proxy on port `8080` with certs in the dane directory run:
+
+    docker run --name letsdane -dp 127.0.0.1:8080:8080 \
+      -v "$(pwd)"/dane:/root/.letsdane \
+      --restart unless-stopped \
+      letsdane -verbose
+
 
 ## Threat Model
 The proxy is intended to be installed locally on your machine, and the generated CA should only be used on that machine. letsdane assumes that your user account is secure (even without letsdane, your user account must not be compromised to be able to use a browser securely) 
