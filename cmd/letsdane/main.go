@@ -37,7 +37,7 @@ var (
 	skipICANN      = flag.Bool("skip-icann", false, "skip TLSA lookups for ICANN tlds and include them in the CA name constraints extension")
 	validity       = flag.Duration("validity", time.Hour, "window of time generated DANE certificates are valid")
 	skipNameChecks = flag.Bool("skip-namechecks", false, "disable name checks when matching DANE-EE TLSA reocrds.")
-	version        = flag.Bool("v", false, "show version")
+	version        = flag.Bool("version", false, "Show version")
 )
 
 func getConfPath() string {

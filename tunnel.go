@@ -17,8 +17,12 @@ import (
 	"time"
 )
 
+var (
+	// Version the current version
+	Version = "(untracked dev)"
+)
+
 const (
-	Version   = "0.5"
 	statusErr = "err"
 )
 
