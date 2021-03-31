@@ -1,21 +1,30 @@
 package resolver
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"github.com/miekg/dns"
+	"io/ioutil"
 	"net"
+	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
 
 // ClientResolver implements Resolver and caches queries.
 type AD struct {
-	rrCache      map[uint16]*cache
-	client       *dns.Client
-	address      string
-	exchangeFunc func(m *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error)
+	rrCache map[uint16]*cache
+	client  *DNSClient
+
+	exchangeFunc func(m *dns.Msg, client *DNSClient) (r *dns.Msg, rtt time.Duration, err error)
 	Verify       func(m *dns.Msg) error
+}
+
+type DNSClient struct {
+	d       *dns.Client
+	addr string
 }
 
 const (
@@ -35,16 +44,60 @@ func parseSimpleAddr(server string) (string, error) {
 	return net.JoinHostPort(server, "53"), nil
 }
 
-// NewAD creates a new ad resolver
-func NewAD(server string) (*AD, error) {
-	addr, err := parseSimpleAddr(server)
+func parseAddress(server string) (string, string, error) {
+	u, err := url.Parse(server)
 	if err != nil {
-		return nil, err
+		return "", "", fmt.Errorf("couldn't parse server address: %v", err)
 	}
 
-	client := new(dns.Client)
-	// TODO: switch to tcp if truncated?
-	client.Net = "udp"
+	var p, defaultPort string
+	host := u.Host
+
+	switch u.Scheme {
+	case "udp":
+		defaultPort = "53"
+		p = ""
+	case "tcp":
+		p = u.Scheme
+		defaultPort = "53"
+	case "tls":
+		p = "tcp-tls"
+		defaultPort = "853"
+	case "https":
+		p = u.Scheme
+		host = u.Scheme + "://" + u.Host
+	default:
+		return "", "", fmt.Errorf("unsupported scheme %s", u.Scheme)
+	}
+
+	_, _, err = net.SplitHostPort(u.Host)
+	if err != nil && u.Scheme != "https" {
+		return net.JoinHostPort(host, defaultPort), p, nil
+	}
+
+	return host, p, nil
+
+}
+
+// NewAD creates a new ad resolver
+func NewAD(server string) (*AD, error) {
+	addr, proto, err := parseAddress(server)
+
+	if err != nil {
+		addr, err = parseSimpleAddr(server)
+
+		if err != nil {
+			return nil, err
+		}
+		proto = "udp"
+	}
+
+	client := &DNSClient{}
+	client.addr = addr
+
+	client.d = new(dns.Client)
+	client.d.Net = proto
+
 	rrCache := make(map[uint16]*cache)
 	rrCache[dns.TypeA] = newCache(maxCache)
 	rrCache[dns.TypeAAAA] = newCache(maxCache)
@@ -53,20 +106,58 @@ func NewAD(server string) (*AD, error) {
 	return &AD{
 		rrCache:      rrCache,
 		client:       client,
-		address:      addr,
 		exchangeFunc: exchange,
 	}, nil
 }
 
-func exchange(m *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
+func exchange(m *dns.Msg, client *DNSClient) (r *dns.Msg, rtt time.Duration, err error) {
 	for i := 0; i < maxAttempts; i++ {
-		r, rtt, err = client.Exchange(m, addr)
+		if client.d.Net == "https"  {
+			return exchangeDOH(m, client.addr)
+		}
+
+		r, rtt, err = client.d.Exchange(m, client.addr)
 		if err == nil {
 			return
 		}
 	}
 
 	return
+}
+
+func exchangeDOH(m *dns.Msg, doh string) (r *dns.Msg, rtt time.Duration, err error) {
+	buf, err := m.Pack()
+	if err != nil {
+		return nil, 0, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, doh+"/dns-query", bytes.NewReader(buf))
+	if err != nil {
+		return nil, 0, err
+	}
+
+	req.Header.Set("content-type", "application/dns-message")
+	req.Header.Set("accept", "application/dns-message")
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, 0, fmt.Errorf("error fetching response %s", resp.Status)
+	}
+
+	defer resp.Body.Close()
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	ans := new(dns.Msg)
+	err = ans.Unpack(b)
+
+	return ans, 0, err
 }
 
 func (rs *AD) checkCache(key string, qtype uint16) (*entry, bool) {
@@ -192,7 +283,7 @@ func (rs *AD) lookup(name string, qtype uint16) ([]dns.RR, bool, error) {
 	m.RecursionDesired = true
 	m.AuthenticatedData = true
 
-	r, _, err := rs.exchangeFunc(m, rs.address, rs.client)
+	r, _, err := rs.exchangeFunc(m, rs.client)
 	if err != nil {
 		return nil, false, err
 	}

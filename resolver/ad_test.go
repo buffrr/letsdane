@@ -4,13 +4,14 @@ import (
 	"errors"
 	"github.com/miekg/dns"
 	"net"
+	"sync"
 	"testing"
 	"time"
 )
 
 func TestAD_LookupTLSA(t *testing.T) {
 	rs, _ := NewAD("0.0.0.0")
-	rs.exchangeFunc = func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
+	rs.exchangeFunc = func(req *dns.Msg, client *DNSClient) (r *dns.Msg, rtt time.Duration, err error) {
 		qm := testData[req.Question[0].Qtype]
 		reply := qm[req.Question[0].Name]
 
@@ -56,7 +57,7 @@ func TestAD_LookupTLSA(t *testing.T) {
 
 func TestAD_LookupIP(t *testing.T) {
 	rs, _ := NewAD("0.0.0.0")
-	rs.exchangeFunc = func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
+	rs.exchangeFunc = func(req *dns.Msg, client *DNSClient) (r *dns.Msg, rtt time.Duration, err error) {
 		qm := testData[req.Question[0].Qtype]
 		reply := qm[req.Question[0].Name]
 
@@ -110,7 +111,7 @@ func TestAD_LookupIP(t *testing.T) {
 
 func TestAD_Verify(t *testing.T) {
 	rs, _ := NewAD("0.0.0.0")
-	rs.exchangeFunc = func(req *dns.Msg, addr string, client *dns.Client) (r *dns.Msg, rtt time.Duration, err error) {
+	rs.exchangeFunc = func(req *dns.Msg, client *DNSClient) (r *dns.Msg, rtt time.Duration, err error) {
 		qm := testData[req.Question[0].Qtype]
 		reply := qm[req.Question[0].Name]
 
@@ -134,6 +135,77 @@ func TestAD_Verify(t *testing.T) {
 	if _, err := rs.LookupIP("ad.example.com"); err != nil {
 		t.Fatal("want no error")
 	}
+}
+
+func TestAD_NewAD(t *testing.T) {
+	ad, err := NewAD("https://cloudflare.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ad.client.addr != "https://cloudflare.com" {
+		t.Fatalf("want %s, got %s", "https://cloudflare.com", ad.client.addr)
+	}
+
+	if ad.client.d.Net != "https" {
+		t.Fatalf("want https, got %s", ad.client.d.Net)
+	}
+
+	ad, err = NewAD("1.1.1.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if ad.client.addr != "1.1.1.1:53" {
+		t.Fatalf("want 1.1.1.1, got %s", ad.client.addr)
+	}
+}
+
+func TestAD_Integration(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test")
+	}
+
+	// quickly go through every supported transport
+	// to make sure they are functional
+	// TODO: create a dummy resolver to test this instead
+	var wg sync.WaitGroup
+	protos := []string{"", "udp://", "tcp://", "tls://", "https://"}
+	wg.Add(len(protos))
+	for _, p := range protos {
+		go func(proto string) {
+			defer wg.Done()
+
+			rs, err := NewAD(proto + "1.1.1.1")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := rs.LookupIP("dnssec-failed.org") ; err == nil {
+				t.Fatal("dnssec-failed.org returned a valid response")
+			}
+
+			ips, err := rs.LookupIP("example.com")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(ips) == 0 {
+				t.Fatalf("got no ips")
+			}
+
+			rrs, err := rs.LookupTLSA("443", "tcp","freebsd.org")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if len(rrs) == 0 {
+				t.Fatalf("got no tlsa records from freebsd.org")
+			}
+		}(p)
+	}
+
+	wg.Wait()
 }
 
 func testRR(rr string) dns.RR {

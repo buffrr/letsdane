@@ -49,57 +49,98 @@ You are essentially trusting your own private certificate authority. You can ins
 You can build the latest version from source for now. binaries in releases are not up to date yet.
 
 
-Go 1.15+ is required. If you compile with unbound, make sure you have libunbound installed.
+Go 1.15+ is required.
 
-    git clone https://github.com/buffrr/letsdane.git && cd letsdane/cmd/letsdane
-    go build -tags unbound
+```bash
+$ git clone https://github.com/buffrr/letsdane.git
+$ cd letsdane/cmd/letsdane && go build
+```
 
-Note: If you have a client-side dnssec validating resolver, you can build without unbound, by removing `-tags unbound` and run letsdane with `-skip-dnssec`
-(letsdane will only check the Authenticated Data flag set by your resolver so you need to make sure it's set up correctly)
+
+
+
+
+To compile letsdane with libunbound, you can add `-tags unbound` (This option is not needed if using Handshake). Go to [Handshake instructions](https://github.com/buffrr/letsdane#lets-dane-with-handshake) instead hsd/hnsd will validate dnssec.
+
+```bash
+$ go build -tags unbound
+```
 
 ## Quick Usage
+
+If using Handshake, please check [Handshake Instructions](https://github.com/buffrr/letsdane#lets-dane-with-handshake).
 
 Let's DANE will generate a CA and store it in `~/.letsdane` when you start it for the first time. 
 To start the proxy server:
 
     ./letsdane
 
-    
-* Add Let's DANE proxy to your web browser `127.0.0.1:8080`
 
-* Import the certificate file into your browser certificate store. You can use `letsdane -o myca.crt` to export the public cert file to a convenient location.
+* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://i.imgur.com/FMQpviE.png))
+
+* Import the certificate file into your browser certificate store ([Firefox example](https://i.imgur.com/vFHUJX4.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location.
 
 By default, letsdane will use the system resolver settings from `/etc/resolv.conf` and fallback to root hints. 
-All queries are DNSSEC validated with a hardcoded ICANN 2017 KSK (you can set trust anchor file by setting `-anchor` option)
+If letsdane is compiled with libunbound, all queries are DNSSEC validated with a hardcoded ICANN 2017 KSK (you can set trust anchor file by setting `-anchor` option)
 
 Use `letsdane -help` to see command line options. 
 
 
 ## Let's DANE with Handshake
 
+Currently, there are two ways to use letsdane with Handshake:
+
+### 1. Using hsd/hnsd (recommended)
+
+
 You can use [hsd](https://github.com/handshake-org/hsd) or [hnsd](https://github.com/handshake-org/hnsd). Specify address:port of the handshake resolver. You must have it local on your machine or use sig0. 
 
 Optionally use `-skip-icann` to skip TLSA lookups for ICANN tlds and prevent the generated CA from issuing certificates for ICANN tlds (recommended hnsd is still experimental and also this will not break some legacy domains using poorly configured nameservers). 
 
-Assuming hnsd is listening on '127.0.0.1:8585'
+Assuming hnsd is listening on '127.0.0.1:5350'
 
-    ./letsdane -r 127.0.0.1:8585 -skip-dnssec -skip-icann
+    ./letsdane -r 127.0.0.1:5350 -skip-dnssec -skip-icann
+
+
+* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://i.imgur.com/FMQpviE.png))
+
+* Import the certificate file into your browser certificate store ([Firefox example](https://i.imgur.com/vFHUJX4.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location.
+
 
 If you use hsd, you can optionally use sig0 by specifying the public key `public_key@ip:port`
 
-    ./letsdane -r aj7bjss4ae6hd3kdxzl4f6klirzla377uifxu5mnzczzk2v7p76ek@192.168.1.22:8585 -skip-icann
+    ./letsdane -r aj7bjss4ae6hd3kdxzl4f6klirzla377uifxu5mnzczzk2v7p76ek@192.168.1.22:5350 -skip-icann
+
 
 Firefox creates a separate CA store for each profile, so it's recommended to use that if you want the CA to only be trusted by a specific profile.
-#### DANE-EE Sites
+
+### 2. Using DoH
+
+You can use any DoH resolver **that you trust**. The resolver must support Handshake if you want Handshake domains to work.
+
+
+```
+$ ./letsdane -r https://easyhandshake.com:8053 -skip-dnssec -skip-icann
+```
+
+
+* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://i.imgur.com/FMQpviE.png))
+
+* Import the certificate file into your browser certificate store ([Firefox example](https://i.imgur.com/vFHUJX4.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location. 
+
+
+### DANE-EE Sites
  
 * FreeBSD: https://freebsd.org
 * Tor Project: https://torproject.org
 
 handshake
 
+* https://3b
 * https://letsdane
 * https://proofofconcept
 * https://humbly
+
 ## Docker
 
 ### Building an image
