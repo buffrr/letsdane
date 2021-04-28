@@ -194,7 +194,7 @@ func setupUnbound() (u *rs.Unbound, err error) {
 		return
 	}
 	defer func() {
-		if err != nil {
+		if u != nil && err != nil {
 			u.Destroy()
 		}
 	}()
