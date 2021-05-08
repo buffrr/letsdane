@@ -2,41 +2,29 @@
 
 package resolver
 
-import (
-	"github.com/miekg/dns"
-	"net"
-)
-
-type Unbound struct {
+type Recursive struct {
+	resolver
 }
 
-func NewUnbound() (u *Unbound, err error) {
+func NewRecursive() (r *Recursive, err error) {
 	return nil, ErrUnboundNotAvail
 }
 
-func (u *Unbound) SetFwd(addr string) error {
+func (r *Recursive) SetFwd(addr string) error {
 	return ErrUnboundNotAvail
 }
 
-func (u *Unbound) ResolvConf(name string) error {
+func (r *Recursive) ResolvConf(name string) error {
 	return ErrUnboundNotAvail
 }
 
-func (u *Unbound) AddTA(ta string) error {
+func (r *Recursive) AddTA(ta string) error {
 	return ErrUnboundNotAvail
 }
 
-func (u *Unbound) AddTAFile(file string) error {
+func (r *Recursive) AddTAFile(file string) error {
 	return ErrUnboundNotAvail
 }
 
-func (u *Unbound) LookupIP(host string) (addrs []net.IP, err error) {
-	return nil, ErrUnboundNotAvail
-}
-
-func (u *Unbound) LookupTLSA(service, proto, name string) (tlsa []*dns.TLSA, err error) {
-	return nil, ErrUnboundNotAvail
-}
-
-func (u *Unbound) Destroy() {
+func (r *Recursive) Destroy() {
 }

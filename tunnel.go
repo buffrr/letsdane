@@ -47,7 +47,7 @@ type tunneler struct {
 func (h *tunneler) Tunnel(ctx context.Context, clientConn *proxy.Conn, network, addr string) {
 	defer clientConn.Close()
 
-	addrs, tlsa, err := h.dialer.resolveDANE(network, addr, h.constraints)
+	addrs, tlsa, err := h.dialer.resolveDANE(ctx, network, addr, h.constraints)
 	if err == errBadHost {
 		h.warnf("bad host", http.StatusBadRequest, addr)
 		clientConn.WriteHeader(http.StatusBadRequest)

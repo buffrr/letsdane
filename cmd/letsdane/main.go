@@ -184,8 +184,8 @@ func exportCA() {
 	}
 }
 
-func setupUnbound() (u *rs.Unbound, err error) {
-	u, err = rs.NewUnbound()
+func setupUnbound() (u *rs.Recursive, err error) {
+	u, err = rs.NewRecursive()
 	if err == rs.ErrUnboundNotAvail {
 		return nil, errors.New("letsdane has not been compiled with unbound. " +
 			"if you have a local dnssec capable resolver, run with -skip-dnssec")
@@ -265,7 +265,7 @@ func main() {
 	}
 
 	var resolver rs.Resolver
-	var sig0, tls bool
+	var sig0, secure bool
 
 	hostport, key, err := splitHostPortKey(*raddr)
 	switch err {
@@ -273,7 +273,7 @@ func main() {
 		sig0 = false
 		u, err := url.Parse(*raddr)
 		if err == nil {
-			tls = u.Scheme == "https" || u.Scheme == "tls"
+			secure = u.Scheme == "https" || u.Scheme == "tls"
 		}
 	case nil:
 		sig0 = true
@@ -284,12 +284,12 @@ func main() {
 	}
 
 	if *ad {
-		if !sig0 && !tls && !isLoopback(*raddr) {
+		if !sig0 && !secure && !isLoopback(*raddr) {
 			log.Printf("You must have a local dnssec capable resolver to use letsdane securely")
 			log.Printf("'%s' is not a loopback address (insecure)!", *raddr)
 		}
 
-		ad, err := rs.NewAD(*raddr)
+		ad, err := rs.NewStub(*raddr)
 		if err != nil {
 			log.Fatal(err)
 		}

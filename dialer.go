@@ -59,7 +59,7 @@ func (d *dialer) dialTLSContext(ctx context.Context, network string, dst *addrLi
 
 // dialContext attempts to connect to the given named address.
 func (d *dialer) dialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-	addrs, err := d.resolveAddr(addr)
+	addrs, err := d.resolveAddr(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -83,13 +83,13 @@ func (d *dialer) dialAddrList(ctx context.Context, network string, dst *addrList
 
 // resolveAddr resolves the named address by performing a dns lookup returning a list
 // of ipv4 and ipv6 addresses
-func (d *dialer) resolveAddr(addr string) (addrs *addrList, err error) {
+func (d *dialer) resolveAddr(ctx context.Context, addr string) (addrs *addrList, err error) {
 	addrs = &addrList{}
 	addrs.Host, addrs.Port, err = net.SplitHostPort(addr)
 	if err != nil {
 		return
 	}
-	addrs.IPs, err = d.resolver.LookupIP(addrs.Host)
+	addrs.IPs, _, err = d.resolver.LookupIP(ctx, "ip", addrs.Host)
 	if err != nil {
 		return
 	}
@@ -103,7 +103,7 @@ func (d *dialer) resolveAddr(addr string) (addrs *addrList, err error) {
 
 // resolveDANE resolves the given host by performing a dns lookup returning
 // an address list of ipv4 and ipv6 addresses and TLSA resource records.
-func (d *dialer) resolveDANE(network, host string, constraints bool) (addrs *addrList, tlsa []*dns.TLSA, err error) {
+func (d *dialer) resolveDANE(ctx context.Context, network, host string, constraints bool) (addrs *addrList, tlsa []*dns.TLSA, err error) {
 	addrs = &addrList{}
 	tlsa = []*dns.TLSA{}
 	addrs.Host, addrs.Port, err = net.SplitHostPort(host)
@@ -119,12 +119,16 @@ func (d *dialer) resolveDANE(network, host string, constraints bool) (addrs *add
 	var tlsaErr, ipErr error
 
 	go func() {
-		addrs.IPs, ipErr = d.resolver.LookupIP(addrs.Host)
+		addrs.IPs, _, ipErr = d.resolver.LookupIP(ctx, "ip", addrs.Host)
 		done <- struct{}{}
 	}()
 
 	if !constraints || !inConstraints(addrs.Host) {
-		tlsa, tlsaErr = d.resolver.LookupTLSA(addrs.Port, network, addrs.Host)
+		var secure bool
+		tlsa, secure, tlsaErr = d.resolver.LookupTLSA(ctx, addrs.Port, network, addrs.Host)
+		if !secure {
+			tlsa = []*dns.TLSA{}
+		}
 	}
 	<-done
 
