@@ -2,6 +2,7 @@ package letsdane
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
@@ -46,12 +47,12 @@ func TestNonConnectHandler(t *testing.T) {
 	_, proxyConfig := newProxyTestConfig(t)
 
 	proxyConfig.Resolver = &testResolver{
-		lookupIP: func(host string) ([]net.IP, error) {
+		lookupIP: func(ctx context.Context, network, host string) ([]net.IP, bool, error) {
 			if host != wantHost {
 				t.Errorf("got host %s, want %s", host, "example.com")
-				return nil, errors.New("no such host")
+				return nil, false, errors.New("no such host")
 			}
-			return []net.IP{net.ParseIP(ip)}, nil
+			return []net.IP{net.ParseIP(ip)}, true, nil
 		},
 	}
 
@@ -160,15 +161,16 @@ func TestHandlerTLS(t *testing.T) {
 	proxyURL, _ := url.Parse(proxySrv.URL)
 
 	var testRequests = []struct {
-		name        string
-		host        string
-		port        string
-		ip          []net.IP
-		tlsa        []*dns.TLSA
-		store       *x509.CertPool
-		fail        bool // whether the request should fail
-		constraints bool
-		nameCheck   bool
+		name         string
+		host         string
+		port         string
+		ip           []net.IP
+		tlsa         []*dns.TLSA
+		tlsaInsecure bool
+		store        *x509.CertPool
+		fail         bool // whether the request should fail
+		constraints  bool
+		nameCheck    bool
 	}{
 		{
 			name:  "no_such_host_no_tlsa",
@@ -232,6 +234,16 @@ func TestHandlerTLS(t *testing.T) {
 			tlsa:  newTLSA(3, 1, 1, targetSrv.Certificate()),
 			store: daneStore,
 			fail:  false,
+		},
+		{
+			name:         "tlsa_insecure",
+			host:         "example.com",
+			port:         targetPort,
+			ip:           []net.IP{net.ParseIP(targetIP)},
+			tlsa:         newTLSA(3, 1, 1, targetSrv.Certificate()),
+			tlsaInsecure: true,
+			store:        daneStore,
+			fail:         true,
 		},
 		{
 			name:  "dane_ee_spki_no_namecheck",
@@ -327,17 +339,17 @@ func TestHandlerTLS(t *testing.T) {
 			}
 
 			// setup resolver for this request
-			resolver.lookupIP = func(host string) ([]net.IP, error) {
+			resolver.lookupIP = func(ctx context.Context, network, host string) ([]net.IP, bool, error) {
 				if testReq.ip != nil && host == testReq.host {
-					return testReq.ip, nil
+					return testReq.ip, true, nil
 				}
-				return nil, errors.New("no such host")
+				return nil, false, errors.New("no such host")
 			}
-			resolver.lookupTLSA = func(service, proto, name string) ([]*dns.TLSA, error) {
+			resolver.lookupTLSA = func(ctx context.Context, service, proto, name string) ([]*dns.TLSA, bool, error) {
 				if testReq.tlsa != nil && name == testReq.host && service == testReq.port && proto == "tcp" {
-					return testReq.tlsa, nil
+					return testReq.tlsa, !testReq.tlsaInsecure, nil
 				}
-				return nil, errors.New("no tlsa record found")
+				return nil, false, errors.New("no tlsa record found")
 			}
 
 			req, _ := http.NewRequest("GET", fmt.Sprintf("https://%s:%s", testReq.host, testReq.port), nil)
@@ -388,11 +400,11 @@ func TestHandlerTLS(t *testing.T) {
 				},
 			},
 		}
-		resolver.lookupIP = func(host string) ([]net.IP, error) {
-			return []net.IP{net.ParseIP(targetIP)}, nil
+		resolver.lookupIP = func(ctx context.Context, network, host string) ([]net.IP, bool, error) {
+			return []net.IP{net.ParseIP(targetIP)}, true, nil
 		}
-		resolver.lookupTLSA = func(service, proto, name string) ([]*dns.TLSA, error) {
-			return newTLSA(3, 0, 0, targetSrv.Certificate()), nil
+		resolver.lookupTLSA = func(ctx context.Context, service, proto, name string) ([]*dns.TLSA, bool, error) {
+			return newTLSA(3, 0, 0, targetSrv.Certificate()), true, nil
 		}
 
 		req, _ := http.NewRequest("GET", "https://example.com:"+targetPort, nil)
@@ -442,14 +454,14 @@ func (rt roundTripperTestFunc) RoundTrip(r *http.Request) (*http.Response, error
 }
 
 type testResolver struct {
-	lookupIP   func(host string) ([]net.IP, error)
-	lookupTLSA func(service, proto, name string) ([]*dns.TLSA, error)
+	lookupIP   func(ctx context.Context, network, host string) ([]net.IP, bool, error)
+	lookupTLSA func(ctx context.Context, service, proto, name string) ([]*dns.TLSA, bool, error)
 }
 
-func (t testResolver) LookupIP(host string) ([]net.IP, error) {
-	return t.lookupIP(host)
+func (t testResolver) LookupIP(ctx context.Context, network, host string) ([]net.IP, bool, error) {
+	return t.lookupIP(ctx, network, host)
 }
 
-func (t testResolver) LookupTLSA(service, proto, name string) ([]*dns.TLSA, error) {
-	return t.lookupTLSA(service, proto, name)
+func (t testResolver) LookupTLSA(ctx context.Context, service, proto, name string) ([]*dns.TLSA, bool, error) {
+	return t.lookupTLSA(ctx, service, proto, name)
 }
