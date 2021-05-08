@@ -85,6 +85,9 @@ func (h *tunneler) Tunnel(ctx context.Context, clientConn *proxy.Conn, network, 
 	clientConn.WriteHeader(http.StatusOK)
 	hello, err := clientConn.PeekClientHello()
 	if err != nil {
+		if err == io.EOF {
+			return
+		}
 		h.warnf("read client hello: %v", statusErr, addr, err)
 		return
 	}
@@ -121,6 +124,9 @@ func (h *tunneler) Tunnel(ctx context.Context, clientConn *proxy.Conn, network, 
 
 	clientTLS := tls.Server(clientConn, clientTLSConfig)
 	if err := clientTLS.Handshake(); err != nil {
+		if err == io.EOF {
+			return
+		}
 		h.warnf("client handshake failed: %v", statusErr, addr, err)
 		return
 	}
