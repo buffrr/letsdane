@@ -1,0 +1,62 @@
+name: Test
+on: [push, pull_request]
+
+jobs:
+
+  test:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        go: [ 1.15.x, 1.16.x ]
+        resolver: [ stub, unbound ]
+        exclude:
+          - os: windows-latest
+            resolver: unbound
+          - os: macos-latest
+            resolver: unbound
+    name: Go Test (${{ matrix.go }}, ${{matrix.resolver}}, ${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Set up Go ${{ matrix.go }}
+        uses: actions/setup-go@v1
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Check out code
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          go mod download
+      - name: Run Unit tests
+        run: |
+          if [ "$RUNNER_OS" == "Linux" ] && [ "${{ matrix.resolver }}" == "unbound"   ]; then
+              sudo apt-get -y update && sudo apt-get install -y libunbound-dev
+              go test -tags unbound  -coverprofile=covprofile ./...
+          else
+              go test -coverprofile=covprofile ./...
+          fi
+        shell: bash
+      - name: Set up GOPATH
+        shell: bash
+        run: |
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+      - name: Install goveralls
+        env:
+          GO111MODULE: off
+        run: go get github.com/mattn/goveralls
+      - name: Coverage
+        env:
+          COVERALLS_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          goveralls -coverprofile=covprofile -service=github -parallel -flagname="(${{ matrix.go }}, ${{matrix.resolver}}, ${{ matrix.os }})"
+        shell: bash
+
+  finish:
+    needs: test
+    name: Finish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Coveralls Finished
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.github_token }}
+          parallel-finished: true
