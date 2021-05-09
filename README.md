@@ -11,7 +11,7 @@ Let's DANE enables the use of [DANE (DNS Based Authentication of Named Entities)
 <p align="center">
 <br>
 <br>
-<img src="chrome.png" width="450px" alt="Let's DANE Handshake"/>
+<img src="https://user-images.githubusercontent.com/41967894/117558135-46a37100-b02f-11eb-8bda-80d26b7acba2.png" width="450px" alt="Let's DANE Handshake"/>
 </p>
 
 <p align="center">
@@ -21,7 +21,7 @@ This domain is DNSSEC signed with <a href="https://ed25519.nl/">ed25519</a> on a
 
 
 <p align="center">
-<img src="firefox.png" width="450px" alt="Let's DANE verified DNSSEC"/><br/>
+<img src="https://user-images.githubusercontent.com/41967894/117558143-5fac2200-b02f-11eb-8222-5dc41033b3f4.png" width="450px" alt="Let's DANE verified DNSSEC"/><br/>
 
 </p>
 
@@ -73,14 +73,14 @@ If using Handshake, please check [Handshake Instructions](https://github.com/buf
 Let's DANE will generate a CA and store it in `~/.letsdane` when you start it for the first time. 
 To start the proxy server:
 
-    ./letsdane
+    $ letsdane -r 1.1.1.1
 
 
-* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://i.imgur.com/FMQpviE.png))
+* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://user-images.githubusercontent.com/41967894/117558156-8f5b2a00-b02f-11eb-98ba-91ce8a9bdd4a.png))
 
-* Import the certificate file into your browser certificate store ([Firefox example](https://i.imgur.com/vFHUJX4.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location.
+* Import the certificate file into your browser certificate store ([Firefox example](https://user-images.githubusercontent.com/41967894/117558164-a7cb4480-b02f-11eb-93ed-678f81f25f2e.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location.
 
-By default, letsdane will use the system resolver settings from `/etc/resolv.conf` and fallback to root hints. 
+If you don't specify a resolver, letsdane will use the system resolver settings from `/etc/resolv.conf` and fallback to root hints. 
 If letsdane is compiled with libunbound, all queries are DNSSEC validated with a hardcoded ICANN 2017 KSK (you can set trust anchor file by setting `-anchor` option)
 
 Use `letsdane -help` to see command line options. 
@@ -99,17 +99,17 @@ Optionally use `-skip-icann` to skip TLSA lookups for ICANN tlds and prevent the
 
 Assuming hnsd is listening on '127.0.0.1:5350'
 
-    ./letsdane -r 127.0.0.1:5350 -skip-dnssec -skip-icann
+    $ letsdane -r 127.0.0.1:5350 -skip-dnssec -skip-icann
 
 
-* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://i.imgur.com/FMQpviE.png))
+* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://user-images.githubusercontent.com/41967894/117558156-8f5b2a00-b02f-11eb-98ba-91ce8a9bdd4a.png))
 
-* Import the certificate file into your browser certificate store ([Firefox example](https://i.imgur.com/vFHUJX4.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location.
+* Import the certificate file into your browser certificate store ([Firefox example](https://user-images.githubusercontent.com/41967894/117558164-a7cb4480-b02f-11eb-93ed-678f81f25f2e.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location.
 
 
 If you use hsd, you can optionally use sig0 by specifying the public key `public_key@ip:port`
 
-    ./letsdane -r aj7bjss4ae6hd3kdxzl4f6klirzla377uifxu5mnzczzk2v7p76ek@192.168.1.22:5350 -skip-icann
+    $ letsdane -r aj7bjss4ae6hd3kdxzl4f6klirzla377uifxu5mnzczzk2v7p76ek@192.168.1.22:5350 -skip-icann
 
 
 Firefox creates a separate CA store for each profile, so it's recommended to use that if you want the CA to only be trusted by a specific profile.
@@ -120,13 +120,13 @@ You can use any DoH resolver **that you trust**. The resolver must support Hands
 
 
 ```
-$ ./letsdane -r https://easyhandshake.com:8053 -skip-dnssec -skip-icann
+$ letsdane -r https://easyhandshake.com:8053 -skip-dnssec -skip-icann
 ```
 
 
-* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://i.imgur.com/FMQpviE.png))
+* Add Let's DANE proxy to your web browser `127.0.0.1:8080` ([Firefox example](https://user-images.githubusercontent.com/41967894/117558156-8f5b2a00-b02f-11eb-98ba-91ce8a9bdd4a.png))
 
-* Import the certificate file into your browser certificate store ([Firefox example](https://i.imgur.com/vFHUJX4.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location. 
+* Import the certificate file into your browser certificate store ([Firefox example](https://user-images.githubusercontent.com/41967894/117558164-a7cb4480-b02f-11eb-93ed-678f81f25f2e.png)). You can use `letsdane -o myca.crt` to export the public cert file to a convenient location. 
 
 
 ### DANE-EE Sites
