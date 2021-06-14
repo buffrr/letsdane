@@ -35,6 +35,7 @@ const (
 	maxTTL      = 3 * time.Hour
 	// max cache len for each rr type
 	maxCache = 5000
+	lookupTimeout = 10 * time.Second
 )
 
 func parseSimpleAddr(server string) (string, error) {
@@ -98,6 +99,7 @@ func NewStub(server string) (*Stub, error) {
 
 	c.d = new(dns.Client)
 	c.d.Net = proto
+	c.d.Timeout = lookupTimeout
 
 	rrCache := make(map[uint16]*cache)
 	rrCache[dns.TypeA] = newCache(maxCache)
