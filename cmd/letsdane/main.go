@@ -72,7 +72,7 @@ func getOrCreateCA() (string, string) {
 
 	if _, err := os.Stat(certPath); err != nil {
 		if _, err := os.Stat(keyPath); err != nil {
-			ca, priv, err := letsdane.NewAuthority("DNSSEC", "DNSSEC", 365*24*time.Hour, *skipICANN)
+			ca, priv, err := letsdane.NewAuthority("DNSSEC", "DNSSEC", 365*24*time.Hour, nameConstraints)
 			if err != nil {
 				log.Fatalf("couldn't generate CA: %v", err)
 			}
@@ -258,6 +258,10 @@ func main() {
 		return
 	}
 
+	if !*skipICANN {
+		nameConstraints = nil
+	}
+
 	ca, priv := loadCA()
 	if *output != "" {
 		exportCA()
@@ -309,13 +313,13 @@ func main() {
 
 		resolver = u
 	}
-
+	
 	c := &letsdane.Config{
 		Certificate:    ca,
 		PrivateKey:     priv,
 		Validity:       *validity,
 		Resolver:       resolver,
-		Constraints:    *skipICANN,
+		Constraints:    nameConstraints,
 		SkipNameChecks: *skipNameChecks,
 		Verbose:        *verbose,
 	}

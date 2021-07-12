@@ -31,7 +31,7 @@ type Config struct {
 	PrivateKey     interface{}
 	Validity       time.Duration
 	Resolver       resolver.Resolver
-	Constraints    bool
+	Constraints    map[string]struct{}
 	SkipNameChecks bool
 	Verbose        bool
 
@@ -43,7 +43,7 @@ type tunneler struct {
 	mitm        *mitmConfig
 	dialer      *dialer
 	nameChecks  bool
-	constraints bool
+	constraints map[string]struct{}
 	logger
 }
 
@@ -254,7 +254,7 @@ func copyConn(dst net.Conn, src net.Conn) {
 }
 
 // inConstraints checks if a domain is in nameConstraints
-func inConstraints(domain string) bool {
+func inConstraints(constraints map[string]struct{}, domain string) bool {
 	l := len(domain)
 
 	if l != 0 && domain[l-1] == '.' {
@@ -268,7 +268,7 @@ func inConstraints(domain string) bool {
 		}
 	}
 
-	_, ok := nameConstraints[domain]
+	_, ok := constraints[domain]
 	return ok
 }
 

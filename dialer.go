@@ -103,7 +103,7 @@ func (d *dialer) resolveAddr(ctx context.Context, addr string) (addrs *addrList,
 
 // resolveDANE resolves the given host by performing a dns lookup returning
 // an address list of ipv4 and ipv6 addresses and TLSA resource records.
-func (d *dialer) resolveDANE(ctx context.Context, network, host string, constraints bool) (addrs *addrList, tlsa []*dns.TLSA, err error) {
+func (d *dialer) resolveDANE(ctx context.Context, network, host string, constraints map[string]struct{}) (addrs *addrList, tlsa []*dns.TLSA, err error) {
 	addrs = &addrList{}
 	tlsa = []*dns.TLSA{}
 	addrs.Host, addrs.Port, err = net.SplitHostPort(host)
@@ -123,7 +123,7 @@ func (d *dialer) resolveDANE(ctx context.Context, network, host string, constrai
 		done <- struct{}{}
 	}()
 
-	if !constraints || !inConstraints(addrs.Host) {
+	if constraints == nil || !inConstraints(constraints, addrs.Host) {
 		var secure bool
 		tlsa, secure, tlsaErr = d.resolver.LookupTLSA(ctx, addrs.Port, network, addrs.Host)
 		if !secure {

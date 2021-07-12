@@ -12,8 +12,15 @@ import (
 	"time"
 )
 
+var constraintTest = map[string]struct{}{
+	"com":    {},
+	"org":    {},
+	"gov":    {},
+	"google": {},
+}
+
 func TestConstraints(t *testing.T) {
-	ca, _, err := NewAuthority("DNSSEC", "DNSSEC", 24*time.Hour, true)
+	ca, _, err := NewAuthority("DNSSEC", "DNSSEC", 24*time.Hour, constraintTest)
 	if err != nil {
 		t.Fatalf("NewAuthority(): got %v, want no error", err)
 	}
@@ -22,7 +29,7 @@ func TestConstraints(t *testing.T) {
 		t.Error("ca.PermittedDNSDomainsCritical: got false, want true")
 	}
 
-	testNames := []string {"google.com", "isc.org", "example.gov"}
+	testNames := []string{"google.com", "isc.org", "example.gov"}
 	for _, name := range testNames {
 		found := false
 		for _, excluded := range ca.ExcludedDNSDomains {
@@ -39,7 +46,7 @@ func TestConstraints(t *testing.T) {
 }
 
 func TestMITM(t *testing.T) {
-	ca, priv, err := NewAuthority("DNSSEC", "DNSSEC", 24*time.Hour, false)
+	ca, priv, err := NewAuthority("DNSSEC", "DNSSEC", 24*time.Hour, nil)
 	if err != nil {
 		t.Fatalf("NewAuthority(): got %v, want no error", err)
 	}
@@ -93,7 +100,7 @@ func TestMITM(t *testing.T) {
 }
 
 func TestCert(t *testing.T) {
-	ca, priv, err := NewAuthority("DNSSEC", "DNSSEC", 24*time.Hour, false)
+	ca, priv, err := NewAuthority("DNSSEC", "DNSSEC", 24*time.Hour, nil)
 	if err != nil {
 		t.Fatalf("NewAuthority(): got %v, want no error", err)
 	}

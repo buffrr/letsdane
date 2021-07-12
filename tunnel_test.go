@@ -19,7 +19,7 @@ import (
 )
 
 func newProxyTestConfig(t *testing.T) (*x509.Certificate, *Config) {
-	ca, priv, err := NewAuthority("TEST", "TEST", time.Hour, false)
+	ca, priv, err := NewAuthority("TEST", "TEST", time.Hour, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -328,7 +328,11 @@ func TestHandlerTLS(t *testing.T) {
 	for _, testReq := range testRequests {
 		t.Run(testReq.name, func(t *testing.T) {
 			proxyHandler.Tunneler.(*tunneler).nameChecks = testReq.nameCheck
-			proxyHandler.Tunneler.(*tunneler).constraints = testReq.constraints
+			if testReq.constraints {
+				proxyHandler.Tunneler.(*tunneler).constraints = constraintTest
+			} else {
+				proxyHandler.Tunneler.(*tunneler).constraints = nil
+			}
 
 			// create an http transport that acts as a client using the proxySrv server
 			tr := &http.Transport{
@@ -376,7 +380,7 @@ func TestHandlerTLS(t *testing.T) {
 
 	t.Run("alpn", func(t *testing.T) {
 		proxyHandler.Tunneler.(*tunneler).nameChecks = true
-		proxyHandler.Tunneler.(*tunneler).constraints = false
+		proxyHandler.Tunneler.(*tunneler).constraints = nil
 
 		// client supports "my_proto_2" and "my_proto"
 		// server only supports "my_proto". letsdane should negotiate a mutually supported ALPN
@@ -439,7 +443,7 @@ func TestNameInConstraints(t *testing.T) {
 
 	for i, test := range tests {
 		t.Run(fmt.Sprintf("test #%d", i), func(t *testing.T) {
-			if inConstraints(test.input) != test.result {
+			if inConstraints(constraintTest, test.input) != test.result {
 				t.Fatalf("input = `%s`: got %v, wanted %v", test.input, !test.result, test.result)
 			}
 		})

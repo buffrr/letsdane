@@ -1,4 +1,4 @@
-package letsdane
+package main
 
 // auto generated do not edit
 // version 2020092500, last updated fri sep 25 07:07:02 2020 utc

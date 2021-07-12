@@ -32,7 +32,7 @@ var nameConstraints = map[string]struct{} {
 	for sc.Scan() {
 		line := strings.ToLower(strings.TrimSpace(sc.Text()))
 		if line != "" && line[0] == '#' {
-			sb.WriteString("package letsdane\n\n")
+			sb.WriteString("package main\n\n")
 			sb.WriteString("// auto generated do not edit\n")
 			sb.WriteString("//" + line[1:] + "\n")
 			sb.WriteString(h)
