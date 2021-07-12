@@ -34,6 +34,9 @@ type Config struct {
 	Constraints    bool
 	SkipNameChecks bool
 	Verbose        bool
+
+	// For handling relative urls/non-proxy requests
+	ContentHandler http.Handler
 }
 
 type tunneler struct {
@@ -183,7 +186,12 @@ func (c *Config) NewHandler() (*proxy.Handler, error) {
 		}()
 
 		if !req.URL.IsAbs() {
-			httpError(rws, "Invalid URL", http.StatusBadRequest)
+			if c.ContentHandler != nil {
+				c.ContentHandler.ServeHTTP(rws, req)
+				return
+			}
+
+			httpError(rws, "You cannot use this proxy to make non-proxy requests", http.StatusBadRequest)
 			return
 		}
 		if req.URL.Scheme == "" {
