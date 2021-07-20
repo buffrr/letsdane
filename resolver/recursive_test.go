@@ -57,7 +57,7 @@ func TestRecursive_Lookup(t *testing.T) {
 		},
 	}
 	r.DefaultResolver = DefaultResolver{
-		Query: r.Query,
+		Query: r.lookup,
 	}
 
 	tests := []struct {
@@ -109,16 +109,16 @@ func TestRecursive_Lookup(t *testing.T) {
 		tname := test.qname + "_" + dns.TypeToString[test.qtype]
 		t.Run(tname, func(t *testing.T) {
 			res := r.Query(ctx, test.qname, test.qtype)
-			if test.out.secure != res.Secure {
-				t.Fatalf("got secure = %v, want %v", res.Secure, test.out.secure)
+			if test.out.Secure != res.Secure {
+				t.Fatalf("got secure = %v, want %v", res.Secure, test.out.Secure)
 			}
 
-			if test.out.err != nil && res.Err == nil {
+			if test.out.Err != nil && res.Err == nil {
 				t.Fatalf("want error")
 			}
 
-			if !rrsEq(test.out.rrs, res.Records) {
-				t.Fatalf("got rrs = %v, want %v", res.Records, test.out.rrs)
+			if !rrsEq(test.out.Records, res.Records) {
+				t.Fatalf("got rrs = %v, want %v", res.Records, test.out.Records)
 			}
 		})
 	}

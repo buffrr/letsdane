@@ -23,7 +23,7 @@ func NewRecursive() (r *Recursive, err error) {
 	r.resolv = func(name string, rrtype, rrclass uint16) (*unbound.Result, error) {
 		return r.ub.Resolve(name, rrtype, rrclass)
 	}
-	r.resolver = DefaultResolver{
+	r.DefaultResolver = DefaultResolver{
 		Query: r.lookup,
 	}
 
