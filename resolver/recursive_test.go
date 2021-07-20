@@ -56,42 +56,42 @@ func TestRecursive_Lookup(t *testing.T) {
 			return res, nil
 		},
 	}
-	r.resolver = resolver{
-		lookup: r.lookup,
+	r.DefaultResolver = DefaultResolver{
+		Query: r.Query,
 	}
 
 	tests := []struct {
 		qname string
 		qtype uint16
-		out   dnsResult
+		out   DNSResult
 	}{
 		{
 			qname: "example.com.",
 			qtype: dns.TypeA,
-			out: dnsResult{
-				rrs: testRRs("example.com. IN A 127.0.0.1"),
+			out: DNSResult{
+				Records: testRRs("example.com. IN A 127.0.0.1"),
 			},
 		},
 		{
 			qname: "_443._tcp.example.com.",
 			qtype: dns.TypeTLSA,
-			out: dnsResult{
-				rrs:    testRRs("_443._tcp.example.com. IN TLSA 3 1 1 31EF2A4D6E285CC29A636C5171F7DA0AC69CC44CEBAF5CD039DA8CC8 1187482A"),
-				secure: true,
+			out: DNSResult{
+				Records: testRRs("_443._tcp.example.com. IN TLSA 3 1 1 31EF2A4D6E285CC29A636C5171F7DA0AC69CC44CEBAF5CD039DA8CC8 1187482A"),
+				Secure:  true,
 			},
 		},
 		{
 			qname: "error.example.com.",
 			qtype: dns.TypeA,
-			out: dnsResult{
-				err: lookupErr,
+			out: DNSResult{
+				Err: lookupErr,
 			},
 		},
 		{
 			qname: "dnssec-failed.org.",
 			qtype: dns.TypeA,
-			out: dnsResult{
-				err: errServFail,
+			out: DNSResult{
+				Err: errServFail,
 			},
 		},
 		{
@@ -108,17 +108,17 @@ func TestRecursive_Lookup(t *testing.T) {
 	for _, test := range tests {
 		tname := test.qname + "_" + dns.TypeToString[test.qtype]
 		t.Run(tname, func(t *testing.T) {
-			res := r.lookup(ctx, test.qname, test.qtype)
-			if test.out.secure != res.secure {
-				t.Fatalf("got secure = %v, want %v", res.secure, test.out.secure)
+			res := r.Query(ctx, test.qname, test.qtype)
+			if test.out.secure != res.Secure {
+				t.Fatalf("got secure = %v, want %v", res.Secure, test.out.secure)
 			}
 
-			if test.out.err != nil && res.err == nil {
+			if test.out.err != nil && res.Err == nil {
 				t.Fatalf("want error")
 			}
 
-			if !rrsEq(test.out.rrs, res.rrs) {
-				t.Fatalf("got rrs = %v, want %v", res.rrs, test.out.rrs)
+			if !rrsEq(test.out.rrs, res.Records) {
+				t.Fatalf("got rrs = %v, want %v", res.Records, test.out.rrs)
 			}
 		})
 	}
@@ -126,7 +126,7 @@ func TestRecursive_Lookup(t *testing.T) {
 	ctx, cancel := context.WithCancel(ctx)
 	cancel()
 
-	if out := r.lookup(ctx, "example.com.", dns.TypeA); out.err == nil {
+	if out := r.Query(ctx, "example.com.", dns.TypeA); out.Err == nil {
 		t.Fatalf("want error")
 	}
 }

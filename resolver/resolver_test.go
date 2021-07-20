@@ -253,7 +253,7 @@ var ipTestCases = []struct {
 func TestResolver_LookupTLSA(t *testing.T) {
 	for _, tc := range tlsaTestCases {
 		t.Run(tc.test, func(t *testing.T) {
-			lookupFn := func(ctx context.Context, qname string, qtype uint16) *dnsResult {
+			lookupFn := func(ctx context.Context, qname string, qtype uint16) *DNSResult {
 				qname = dns.Fqdn(qname)
 				if qtype != dns.TypeTLSA {
 					t.Fatal("want qtype = TLSA")
@@ -274,14 +274,14 @@ func TestResolver_LookupTLSA(t *testing.T) {
 					err = errServFail
 				}
 
-				return &dnsResult{
-					rrs:    data.Answer,
-					secure: data.AuthenticatedData,
-					err:    err,
+				return &DNSResult{
+					Records: data.Answer,
+					Secure:  data.AuthenticatedData,
+					Err:     err,
 				}
 			}
 
-			r := resolver{lookupFn}
+			r := DefaultResolver{lookupFn}
 			got, secure, err := r.LookupTLSA(context.Background(), tc.service, tc.proto, tc.name)
 
 			if err == nil && tc.out.err != nil {
@@ -300,8 +300,8 @@ func TestResolver_LookupTLSA(t *testing.T) {
 }
 
 func TestResolver_LookupIP(t *testing.T) {
-	r := resolver{
-		lookup: func(ctx context.Context, qname string, qtype uint16) *dnsResult {
+	r := DefaultResolver{
+		Query: func(ctx context.Context, qname string, qtype uint16) *DNSResult {
 			qname = dns.Fqdn(qname)
 			if qtype != dns.TypeA && qtype != dns.TypeAAAA {
 				t.Fatalf("got qtype = %s, want qtype = A/AAAA", dns.TypeToString[qtype])
@@ -320,7 +320,7 @@ func TestResolver_LookupIP(t *testing.T) {
 				err = errServFail
 			}
 
-			return &dnsResult{reply.Answer, reply.AuthenticatedData, err}
+			return &DNSResult{reply.Answer, reply.AuthenticatedData, err}
 		},
 	}
 

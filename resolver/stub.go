@@ -21,7 +21,7 @@ type Stub struct {
 
 	exchangeFunc func(ctx context.Context, m *dns.Msg, client *client) (r *dns.Msg, rtt time.Duration, err error)
 	Verify       func(m *dns.Msg) error
-	resolver
+	DefaultResolver
 }
 
 type client struct {
@@ -111,8 +111,8 @@ func NewStub(server string) (*Stub, error) {
 		client:       c,
 		exchangeFunc: exchange,
 	}
-	stub.resolver = resolver{
-		lookup: stub.lookup,
+	stub.DefaultResolver = DefaultResolver{
+		Query: stub.lookup,
 	}
 
 	return stub, nil
@@ -180,9 +180,9 @@ func (s *Stub) checkCache(key string, qtype uint16) (*entry, bool) {
 	return nil, false
 }
 
-func (s *Stub) lookup(ctx context.Context, name string, qtype uint16) *dnsResult {
+func (s *Stub) lookup(ctx context.Context, name string, qtype uint16) *DNSResult {
 	if ans, ok := s.checkCache(name, qtype); ok {
-		return &dnsResult{ans.msg, ans.secure, nil}
+		return &DNSResult{ans.msg, ans.secure, nil}
 	}
 
 	m := new(dns.Msg)
@@ -193,21 +193,21 @@ func (s *Stub) lookup(ctx context.Context, name string, qtype uint16) *dnsResult
 
 	r, _, err := s.exchangeFunc(ctx, m, s.client)
 	if err != nil {
-		return &dnsResult{nil, false, err}
+		return &DNSResult{nil, false, err}
 	}
 
 	if s.Verify != nil {
 		if err := s.Verify(r); err != nil {
-			return &dnsResult{nil, false, fmt.Errorf("verify error: %v", err)}
+			return &DNSResult{nil, false, fmt.Errorf("verify error: %v", err)}
 		}
 	}
 
 	if r.Truncated {
-		return &dnsResult{nil, false, errors.New("response truncated")}
+		return &DNSResult{nil, false, errors.New("response truncated")}
 	}
 
 	if r.Rcode == dns.RcodeServerFailure {
-		return &dnsResult{nil, false, errServFail}
+		return &DNSResult{nil, false, errServFail}
 	}
 
 	if r.Rcode == dns.RcodeSuccess || r.Rcode == dns.RcodeNameError {
@@ -219,10 +219,10 @@ func (s *Stub) lookup(ctx context.Context, name string, qtype uint16) *dnsResult
 
 		s.rrCache[qtype].set(name, e)
 
-		return &dnsResult{e.msg, e.secure, nil}
+		return &DNSResult{e.msg, e.secure, nil}
 	}
 
-	return &dnsResult{nil, false, fmt.Errorf("failed with rcode %d", r.Rcode)}
+	return &DNSResult{nil, false, fmt.Errorf("failed with rcode %d", r.Rcode)}
 }
 
 // getMinTTL get the ttl for dns msg

@@ -25,26 +25,26 @@ type Resolver interface {
 var ErrUnboundNotAvail = errors.New("unbound not available")
 var errServFail = errors.New("server failure")
 
-type dnsResult struct {
-	rrs    []dns.RR
-	secure bool
-	err    error
+type DNSResult struct {
+	Records []dns.RR
+	Secure  bool
+	Err     error
 }
 
-type resolver struct {
-	lookup func(ctx context.Context, name string, qtype uint16) *dnsResult
+type DefaultResolver struct {
+	Query func(ctx context.Context, name string, qtype uint16) *DNSResult
 }
 
 // LookupIP looks up host for the given networks.
 // It returns a slice of that host's IP addresses of the type specified by
 // networks, and whether the lookup was secure
 // networks must be one of "ip", "ip4" or "ip6".
-func (r *resolver) LookupIP(ctx context.Context, network, host string) (ips []net.IP, secure bool, err error) {
+func (r *DefaultResolver) LookupIP(ctx context.Context, network, host string) (ips []net.IP, secure bool, err error) {
 	if ip := parseIP(host); ip != nil {
 		return []net.IP{ip}, false, nil
 	}
 
-	lane := make(chan *dnsResult, 1)
+	lane := make(chan *DNSResult, 1)
 	qtypes := []uint16{dns.TypeA, dns.TypeAAAA}
 	switch network {
 	case "ip4":
@@ -54,7 +54,7 @@ func (r *resolver) LookupIP(ctx context.Context, network, host string) (ips []ne
 	}
 
 	queryFn := func(qtype uint16) {
-		lane <- r.lookup(ctx, host, qtype)
+		lane <- r.Query(ctx, host, qtype)
 	}
 
 	for _, qtype := range qtypes {
@@ -67,15 +67,15 @@ func (r *resolver) LookupIP(ctx context.Context, network, host string) (ips []ne
 		// should only be set if all lookups
 		// are secure. If one lookup fails
 		// assume insecure
-		secure = secure && result.secure
+		secure = secure && result.Secure
 
-		if result.err != nil {
-			err = result.err
+		if result.Err != nil {
+			err = result.Err
 			continue
 		}
 
 		err = nil
-		for _, rr := range result.rrs {
+		for _, rr := range result.Records {
 			switch t := rr.(type) {
 			case *dns.A:
 				ips = append(ips, t.A)
@@ -91,7 +91,7 @@ func (r *resolver) LookupIP(ctx context.Context, network, host string) (ips []ne
 // LookupTLSA looks up TLSA records for the given service, protocol and name.
 // It returns a slice of that name's TLSA records and
 // whether the lookup was secure.
-func (r *resolver) LookupTLSA(ctx context.Context, service, proto, name string) ([]*dns.TLSA, bool, error) {
+func (r *DefaultResolver) LookupTLSA(ctx context.Context, service, proto, name string) ([]*dns.TLSA, bool, error) {
 	if parseIP(name) != nil {
 		return []*dns.TLSA{}, false, nil
 	}
@@ -101,20 +101,20 @@ func (r *resolver) LookupTLSA(ctx context.Context, service, proto, name string) 
 		return nil, false, err
 	}
 
-	result := r.lookup(ctx, tlsaName, dns.TypeTLSA)
-	if result.err != nil {
-		return nil, false, result.err
+	result := r.Query(ctx, tlsaName, dns.TypeTLSA)
+	if result.Err != nil {
+		return nil, false, result.Err
 	}
 
 	var rrs []*dns.TLSA
-	for _, rr := range result.rrs {
+	for _, rr := range result.Records {
 		switch t := rr.(type) {
 		case *dns.TLSA:
 			rrs = append(rrs, t)
 		}
 	}
 
-	return rrs, result.secure, nil
+	return rrs, result.Secure, nil
 }
 
 func parseIP(name string) net.IP {

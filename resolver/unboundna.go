@@ -3,7 +3,7 @@
 package resolver
 
 type Recursive struct {
-	resolver
+	DefaultResolver
 }
 
 func NewRecursive() (r *Recursive, err error) {
