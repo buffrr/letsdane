@@ -66,7 +66,7 @@ func (r *Recursive) cgoLookup(name string, qtype uint16, result chan<- DNSResult
 	}
 
 	if res.Bogus {
-		result <- DNSResult{Err: fmt.Errorf("unbound: bogus: %s: %w", res.WhyBogus, errServFail)}
+		result <- DNSResult{Err: fmt.Errorf("unbound: bogus: %s: %w", res.WhyBogus, ErrServFail)}
 		return
 	}
 

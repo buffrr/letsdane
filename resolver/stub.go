@@ -207,7 +207,7 @@ func (s *Stub) lookup(ctx context.Context, name string, qtype uint16) *DNSResult
 	}
 
 	if r.Rcode == dns.RcodeServerFailure {
-		return &DNSResult{nil, false, errServFail}
+		return &DNSResult{nil, false, ErrServFail}
 	}
 
 	if r.Rcode == dns.RcodeSuccess || r.Rcode == dns.RcodeNameError {

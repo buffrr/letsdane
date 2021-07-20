@@ -91,7 +91,7 @@ func TestRecursive_Lookup(t *testing.T) {
 			qname: "dnssec-failed.org.",
 			qtype: dns.TypeA,
 			out: DNSResult{
-				Err: errServFail,
+				Err: ErrServFail,
 			},
 		},
 		{

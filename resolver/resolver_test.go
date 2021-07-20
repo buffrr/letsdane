@@ -163,7 +163,7 @@ var tlsaTestCases = []struct {
 		proto:   "tcp",
 		name:    "dnssec-failed.org.",
 		out: &tlsaOut{
-			err: errServFail,
+			err: ErrServFail,
 		},
 	},
 	{
@@ -211,7 +211,7 @@ var ipTestCases = []struct {
 		name:     "dnssec-failed.org.",
 		networks: []string{"ip4", "ip6", "ip"},
 		out: &ipOut{
-			err: errServFail,
+			err: ErrServFail,
 		},
 	},
 	{
@@ -271,7 +271,7 @@ func TestResolver_LookupTLSA(t *testing.T) {
 
 				var err error
 				if data.Rcode == dns.RcodeServerFailure {
-					err = errServFail
+					err = ErrServFail
 				}
 
 				return &DNSResult{
@@ -317,7 +317,7 @@ func TestResolver_LookupIP(t *testing.T) {
 
 			var err error
 			if reply.Rcode == dns.RcodeServerFailure {
-				err = errServFail
+				err = ErrServFail
 			}
 
 			return &DNSResult{reply.Answer, reply.AuthenticatedData, err}

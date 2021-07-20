@@ -23,7 +23,7 @@ type Resolver interface {
 }
 
 var ErrUnboundNotAvail = errors.New("unbound not available")
-var errServFail = errors.New("server failure")
+var ErrServFail = errors.New("server failure")
 
 type DNSResult struct {
 	Records []dns.RR
