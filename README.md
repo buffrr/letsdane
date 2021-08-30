@@ -132,8 +132,10 @@ $ letsdane -r https://easyhandshake.com:8053 -skip-dnssec -skip-icann
 
 ### DANE-EE Sites
  
-* FreeBSD: https://freebsd.org
-* Tor Project: https://torproject.org
+* FreeBSD: https://freebsd.org (Free Unix-like operating system)
+* Tor Project: https://torproject.org (Anonymizing web browser)
+* danectl: https://raf.org/danectl (DNSSEC DANE implentation manager)
+* Shumon Huque: https://www.huque.com/pages/tools (DANE tools)
 
 handshake
 
