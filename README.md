@@ -142,6 +142,11 @@ handshake
 * https://proofofconcept
 * https://humbly
 
+### DANE Tools
+
+* Shumon Huque: https://www.huque.com/pages/tools.html (DANE tools)
+* danectl: https://raf.org/danectl (DNSSEC DANE implentation manager)
+
 ## Docker
 
 ### Building an image
