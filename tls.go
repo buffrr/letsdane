@@ -23,6 +23,7 @@ func newTLSConfig(host string, rrs []*dns.TLSA, nameCheck bool) *tls.Config {
 		InsecureSkipVerify: true,
 		VerifyConnection:   verifyConnection(rrs, nameCheck),
 		ServerName:         host,
+		MinVersion:         tls.VersionTLS12,
 	}
 }
 
