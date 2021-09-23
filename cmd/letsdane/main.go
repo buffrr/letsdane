@@ -313,7 +313,7 @@ func main() {
 
 		resolver = u
 	}
-	
+
 	c := &letsdane.Config{
 		Certificate:    ca,
 		PrivateKey:     priv,

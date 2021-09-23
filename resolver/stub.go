@@ -34,7 +34,7 @@ const (
 	minTTL      = 10 * time.Second
 	maxTTL      = 3 * time.Hour
 	// max cache len for each rr type
-	maxCache = 5000
+	maxCache      = 5000
 	lookupTimeout = 10 * time.Second
 )
 

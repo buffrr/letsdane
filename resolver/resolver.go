@@ -23,7 +23,7 @@ type Resolver interface {
 }
 
 var ErrUnboundNotAvail = errors.New("unbound not available")
-var ErrServFail = errors.New("server failure")
+var ErrServFail = errors.New("dns lookup failed (rcode: servfail)")
 
 type DNSResult struct {
 	Records []dns.RR
