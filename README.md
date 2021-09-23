@@ -16,7 +16,7 @@ Let's DANE enables the use of [DANE (DNS Based Authentication of Named Entities)
 </p>
 
 <p align="center">
-This domain is DNSSEC signed with <a href="https://ed25519.nl/">ed25519</a> on a decentralized name and CA, handshake.org.   
+This domain is DNSSEC signed with <a href="https://ed25519.nl/">ed25519</a> in an experimental decentralized alternate root zone, handshake.org.   
 <br><br>
 </p>
 
@@ -50,26 +50,16 @@ You are essentially trusting your own private certificate authority. You can ins
 You can build the latest version from source for now. binaries in releases are not up to date yet.
 
 
-Go 1.15+ is required.
+Go 1.15+ is required. (unbound is optional omit `-tags unbound` to use AD bit only)
 
 ```bash
-$ git clone https://github.com/buffrr/letsdane.git
-$ cd letsdane/cmd/letsdane && go build
+apt install libunbound-dev
+git clone https://github.com/buffrr/letsdane.git && cd letsdane/cmd/letsdane
+go build -tags unbound
 ```
 
-
-
-
-
-To compile letsdane with libunbound, you can add `-tags unbound` (This option is not needed if using Handshake). Go to [Handshake instructions](https://github.com/buffrr/letsdane#lets-dane-with-handshake) instead hsd/hnsd will validate dnssec.
-
-```bash
-$ go build -tags unbound
-```
 
 ## Quick Usage
-
-If using Handshake, please check [Handshake Instructions](https://github.com/buffrr/letsdane#lets-dane-with-handshake).
 
 Let's DANE will generate a CA and store it in `~/.letsdane` when you start it for the first time. 
 To start the proxy server:
@@ -87,7 +77,7 @@ If letsdane is compiled with libunbound, all queries are DNSSEC validated with a
 Use `letsdane -help` to see command line options. 
 
 
-## Let's DANE with Handshake
+## Using with Handshake root zone
 
 Currently, there are two ways to use letsdane with Handshake:
 
@@ -144,8 +134,10 @@ handshake
 
 ### DANE Tools
 
-* Shumon Huque: https://www.huque.com/pages/tools.html (DANE tools)
-* danectl: https://raf.org/danectl (DNSSEC DANE implentation manager)
+
+* danectl: https://raf.org/danectl (helper tool for certbot & letsencrypt)
+* other: https://www.huque.com/pages/tools.html (various DANE tools)
+
 
 ## Docker
 
