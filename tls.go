@@ -20,7 +20,7 @@ func (t *tlsError) Error() string {
 // newTLSConfig creates a new tls configuration capable of validating DANE.
 func newTLSConfig(host string, rrs []*dns.TLSA, nameCheck bool) *tls.Config {
 	return &tls.Config{
-		InsecureSkipVerify: true,
+		InsecureSkipVerify: true, // lgtm[go/disabled-certificate-check]
 		VerifyConnection:   verifyConnection(rrs, nameCheck),
 		ServerName:         host,
 		MinVersion:         tls.VersionTLS12,
