@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"strconv"
 	"time"
 )
 
@@ -174,15 +175,16 @@ func (c *Config) NewHandler() (*proxy.Handler, error) {
 	p.NonConnect = http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
 		rws := &rwStatusReader{ResponseWriter: rw}
 		defer func() {
-			if rws.err != nil {
-				log.Printf("[WARN] http: %s %s %s://%s%s: %v", statusErr, req.Method,
-					req.URL.Scheme, req.URL.Host, req.URL.Path, rws.err)
+			if rws.err == nil && !c.Verbose {
 				return
 			}
-			if c.Verbose {
-				log.Printf("[INFO] http: %d %s %s://%s%s", rws.status, req.Method,
-					req.URL.Scheme, req.URL.Host, req.URL.Path)
+
+			u := strconv.Quote(fmt.Sprintf("%s://%s%s", req.URL.Scheme, req.URL.Host, req.URL.Path))
+			if rws.err != nil {
+				log.Printf("[WARN] http: %s %s %s: %v", statusErr, req.Method, u, rws.err)
+				return
 			}
+			log.Printf("[INFO] http: %d %s %s", rws.status, req.Method, u)
 		}()
 
 		if !req.URL.IsAbs() {
