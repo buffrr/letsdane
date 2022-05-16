@@ -123,7 +123,9 @@ func (h *tunneler) Tunnel(ctx context.Context, clientConn *proxy.Conn, network, 
 	// used by the remote server
 	clientTLSConfig := h.mitm.configForTLSADomain(tlsaDomain)
 	if alpn {
-		clientTLSConfig.NextProtos = []string{remote.ConnectionState().NegotiatedProtocol}
+		if serverProto := remote.ConnectionState().NegotiatedProtocol; serverProto != "" {
+			clientTLSConfig.NextProtos = []string{serverProto}
+		}
 	}
 
 	clientTLS := tls.Server(clientConn, clientTLSConfig)
