@@ -7,9 +7,9 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 )
 
@@ -47,7 +47,7 @@ var nameConstraints = map[string]struct{} {
 	}
 	sb.WriteString("}\n")
 
-	if err := ioutil.WriteFile("tld.go", sb.Bytes(), 0600); err != nil {
+	if err := os.WriteFile("tld.go", sb.Bytes(), 0600); err != nil {
 		log.Fatal(err)
 	}
 

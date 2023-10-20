@@ -8,11 +8,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/buffrr/hsig0"
-	"github.com/buffrr/letsdane"
-	rs "github.com/buffrr/letsdane/resolver"
-	"github.com/miekg/dns"
-	"io/ioutil"
 	"log"
 	"net"
 	"net/url"
@@ -20,6 +15,11 @@ import (
 	"path"
 	"strings"
 	"time"
+
+	"github.com/buffrr/hsig0"
+	"github.com/buffrr/letsdane"
+	rs "github.com/buffrr/letsdane/resolver"
+	"github.com/miekg/dns"
 )
 
 const KSK2017 = `. IN DS 20326 8 2 E06D44B80B8F1D39A95C0B0D7C65D08458E880409BBC683457104237C7F8EC8D`
@@ -108,12 +108,12 @@ func getOrCreateCA() (string, string) {
 }
 
 func loadX509KeyPair(certFile, keyFile string) (tls.Certificate, error) {
-	certPEMBlock, err := ioutil.ReadFile(certFile)
+	certPEMBlock, err := os.ReadFile(certFile)
 	if err != nil {
 		return tls.Certificate{}, err
 	}
 
-	keyPEMBlock, err := ioutil.ReadFile(keyFile)
+	keyPEMBlock, err := os.ReadFile(keyFile)
 	if err != nil {
 		return tls.Certificate{}, err
 	}
@@ -174,12 +174,12 @@ func isLoopback(r string) bool {
 }
 
 func exportCA() {
-	b, err := ioutil.ReadFile(*certPath)
+	b, err := os.ReadFile(*certPath)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	if err := ioutil.WriteFile(*output, b, 0600); err != nil {
+	if err := os.WriteFile(*output, b, 0600); err != nil {
 		log.Fatal(err)
 	}
 }
