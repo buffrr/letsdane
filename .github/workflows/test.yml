@@ -7,7 +7,7 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
-        go: [ 1.15.x, 1.16.x ]
+        go: [ 1.21.x ]
         resolver: [ stub, unbound ]
         exclude:
           - os: windows-latest
