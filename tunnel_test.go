@@ -7,8 +7,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
-	"github.com/miekg/dns"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -16,6 +15,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 func newProxyTestConfig(t *testing.T) (*x509.Certificate, *Config) {
@@ -111,7 +112,7 @@ func TestNonConnectHandler(t *testing.T) {
 			}
 
 			if resp.StatusCode == http.StatusOK {
-				b, err := ioutil.ReadAll(resp.Body)
+				b, err := io.ReadAll(resp.Body)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -369,7 +370,7 @@ func TestHandlerTLS(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			body, err := ioutil.ReadAll(resp.Body)
+			body, err := io.ReadAll(resp.Body)
 			resp.Body.Close()
 			content := string(body)
 			if content != "foo" {
@@ -418,7 +419,7 @@ func TestHandlerTLS(t *testing.T) {
 		}
 		defer resp.Body.Close()
 
-		body, _ := ioutil.ReadAll(resp.Body)
+		body, _ := io.ReadAll(resp.Body)
 		c := string(body)
 		if c != "ALPN TEST" {
 			t.Fatalf("body = %s, wanted 'ALPN TEST'", c)

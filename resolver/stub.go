@@ -5,12 +5,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/miekg/dns"
-	"io/ioutil"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 // Stub is an AD-bit aware stub resolver
@@ -157,7 +158,7 @@ func exchangeDOH(ctx context.Context, m *dns.Msg, doh string) (r *dns.Msg, rtt t
 	}
 
 	defer resp.Body.Close()
-	b, err := ioutil.ReadAll(resp.Body)
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, 0, err
 	}
